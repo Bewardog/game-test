@@ -4394,7 +4394,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateLairUpperFloor("Level 3", LairCommandY, platform, rail);
         CreateAtriumSupportPillars(platform, rail);
 
-        CreateLairArchitecturalOverlays(rail);
 
         CreateDecorationBlock("West Operations Light Band", new Vector3(-21.66f, LairOperationsY, lairCenterZ), new Vector3(0.08f, 0.28f, lairDepth - 1f), rail);
         CreateDecorationBlock("East Operations Light Band", new Vector3(21.66f, LairOperationsY, lairCenterZ), new Vector3(0.08f, 0.28f, lairDepth - 1f), rail);
