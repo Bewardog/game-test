@@ -54,6 +54,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         public float doorHeight;
         public Vector2 legacySize;  // original room footprint, used to spread props proportionally
         public bool exteriorDoor;   // entered from outside through the south facade instead of the atrium
+        public bool isMissionRoom;  // mission operations: always open, holds the mission briefing table
 
         // Exterior doors sit in the south wall, this far out from the atrium wall.
         public float ExteriorDoorX => side * (LairHalfWidth + 14f);
@@ -70,7 +71,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
     private static readonly LairRoomSpec[] LairRoomSpecs =
     {
         Room(RoomType.Garage,                 -1f, 0f,                     2.15f, 34f, 53.7f, 9f, 12f,  7f,   15f, 18f, false, true),
-        Room(RoomType.MedicalBay,              1f, 0f,                     6f,  24f, 26f, 8.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.MedicalBay,              1f, 0f,                     22f, 24f, 24f, 8.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.IntelCenter,             1f, 0f,                     -8f, 26f, 30f, 7.5f, 5f,   4.2f, 10f, 11f, false, false, true),
         Room(RoomType.Armory,                 -1f, LairOperationsY + 0.2f, -12f, 22f, 23f, 8.5f, 4.4f, 4f,   10f, 11f),
         Room(RoomType.TrainingRoom,           -1f, LairOperationsY + 0.2f, 17f,  30f, 32f, 8.5f, 6f,   4.5f, 14f, 17f),
         Room(RoomType.ResearchLab,             1f, LairOperationsY + 0.2f, -6f,  26f, 30f, 8.5f, 4.4f, 4f,   10f, 11f),
@@ -92,13 +94,15 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float legacyWidth,
         float legacyDepth,
         bool isRecruitQuarters = false,
-        bool exteriorDoor = false)
+        bool exteriorDoor = false,
+        bool isMissionRoom = false)
     {
         return new LairRoomSpec
         {
             roomType = roomType,
             isRecruitQuarters = isRecruitQuarters,
             exteriorDoor = exteriorDoor,
+            isMissionRoom = isMissionRoom,
             side = side,
             floorY = floorY,
             centerZ = centerZ,
@@ -237,7 +241,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         PrototypeEnvironmentArt.BeginHub();
         CreateSecretLairEnvironment();
         CreatePlayer(new Vector3(0f, 1f, -62f));
-        CreateMissionTerminal();
+        CreateMissionOperationsRoom();
         CreateHubRoomBays();
         CreateRecruitQuarters();
         CreateHubRecruitResidents();
@@ -4429,7 +4433,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         CreateLairArrivalCourtyard(wall, platform, rail);
         CreateLairReceptionHub(wall, platform, rail);
-        CreateBlock("Mission Control Dais", new Vector3(0f, 0.15f, -12.5f), new Vector3(8f, 0.3f, 6f), new Color(0.23f, 0.27f, 0.29f));
         CreateWorldLabel("THE AERIE", new Vector3(0f, 23.8f, 34.6f), new Color(0.85f, 0.94f, 0.96f), 0.32f);
         CreateWorldLabel("AERIE SECURE ACCESS", new Vector3(0f, 7.9f, -25.4f), Color.white, 0.18f);
         CreateWorldLabel("LEVEL 2  OPERATIONS", new Vector3(0f, LairOperationsY + 4.3f, -24.6f), Color.white, 0.16f);
@@ -4723,7 +4726,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             "Ground Logistics Directory",
             new Vector3(0f, 0f, 20.5f),
             "G  LOGISTICS",
-            "MEDICAL BAY  >\nMECH HANGAR  VIA WEST COURTYARD\nMISSION CONTROL  SOUTH",
+            "MISSION OPERATIONS  >  SOUTH-EAST\nMEDICAL BAY  >  NORTH-EAST\nMECH HANGAR  VIA WEST COURTYARD",
             new Color(0.16f, 0.76f, 0.72f));
         CreateLairDirectoryPylon(
             "Operations Directory",
@@ -4976,52 +4979,167 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 15f);
         }
 
-        CreateWorldLabel("MISSION CONTROL // RECEPTION", new Vector3(0f, 5.15f, -23.9f), Color.white, 0.16f);
+        CreateWorldLabel("RECEPTION", new Vector3(0f, 5.15f, -23.9f), Color.white, 0.16f);
         CreateWorldLabel("ATRIUM ACCESS", new Vector3(0f, 5.05f, -4.25f), Color.white, 0.13f);
     }
 
-    private void CreateMissionTerminal()
+    // Mission Operations: the room where the player picks a contract. Always
+    // open (it isn't a buildable department), with a briefing table in the
+    // middle that opens the mission directory.
+    private void CreateMissionOperationsRoom()
     {
         GameFlowManager flow = GameFlowManager.Instance;
-        if (flow == null || flow.missions.Count == 0) return;
-
-        Vector3 position = new Vector3(0f, 0f, -12.5f);
-        Color accentColor = new Color(0.18f, 0.82f, 0.8f);
-        GameObject pedestal = CreateEnvironmentModel(
-            "BriefingTable_A",
-            "Campaign Mission Terminal",
-            position,
-            Quaternion.Euler(0f, 180f, 0f),
-            Vector3.one * 1.28f,
-            accentColor);
-        if (pedestal == null)
+        LairRoomSpec spec = default;
+        bool found = false;
+        foreach (LairRoomSpec candidate in LairRoomSpecs)
         {
-            pedestal = CreateBlock(
-                "Campaign Mission Terminal Fallback",
-                position + Vector3.up * 0.9f,
-                new Vector3(4.8f, 1.8f, 1f),
-                new Color(0.06f, 0.22f, 0.28f));
+            if (!candidate.isMissionRoom) continue;
+            spec = candidate;
+            found = true;
+            break;
         }
 
-        EnsureBoxCollider(
-            pedestal,
-            new Vector3(4.7f, 1.55f, 2.5f),
-            new Vector3(0f, 0.78f, 0f));
-        pedestal.AddComponent<MissionTerminal>();
-        CreateWorldLabel(
-            "ALL CONTRACTS\nE  ACCESS",
-            position + new Vector3(0f, 2.15f, 0.25f),
-            Color.white,
-            0.13f,
-            pedestal.transform);
-        CreateWorldLabel("MISSION CONTROL", new Vector3(0f, 3.2f, -11.8f), Color.white, 0.24f);
+        if (!found) return;
+
+        Vector3 position = spec.Position;
+        float side = spec.side;
+        float roomWidth = spec.width;
+        float roomDepth = spec.depth;
+        float roomHeight = spec.height;
+        float doorWidth = spec.doorWidth;
+        float doorHeight = spec.doorHeight;
+        float entranceWallX = spec.EntranceWallX;
+        float outerWallX = spec.OuterWallX;
+        Color accent = new Color(0.18f, 0.82f, 0.8f);
+        Color wallColor = new Color(0.2f, 0.23f, 0.25f);
+
+        GameObject room = new GameObject("Mission Operations Room");
+        room.transform.SetParent(runtimeRoot, false);
+        room.transform.position = position;
+        Transform parent = room.transform;
+
+        CreateBlock("Mission Operations Finished Floor", position + new Vector3(0f, 0.02f, 0f), new Vector3(roomWidth, 0.12f, roomDepth), new Color(0.12f, 0.14f, 0.15f), parent);
+        CreateBlock("Mission Operations Outer Wall", new Vector3(outerWallX, position.y + roomHeight * 0.5f, position.z), new Vector3(0.32f, roomHeight, roomDepth), wallColor, parent);
+        CreateBlock("Mission Operations North Wall", position + new Vector3(0f, roomHeight * 0.5f, roomDepth * 0.5f), new Vector3(roomWidth, roomHeight, 0.32f), wallColor, parent);
+        CreateBlock("Mission Operations South Wall", position + new Vector3(0f, roomHeight * 0.5f, -roomDepth * 0.5f), new Vector3(roomWidth, roomHeight, 0.32f), wallColor, parent);
+        CreateVerticalDoorWall("Mission Operations Atrium Entrance", entranceWallX, position.z, roomDepth, position.y + roomHeight * 0.5f, roomHeight, position.z, doorWidth, wallColor, parent, doorHeight);
+        CreateBlock("Mission Operations Finished Ceiling", position + new Vector3(0f, roomHeight - 0.05f, 0f), new Vector3(roomWidth, 0.18f, roomDepth), new Color(0.1f, 0.12f, 0.135f), parent);
+
+        float frameX = entranceWallX - side * 0.18f;
+        CreateDecorationBlock("Mission Operations Door Frame South", new Vector3(frameX, position.y + doorHeight * 0.5f, position.z - doorWidth * 0.5f), new Vector3(0.18f, doorHeight, 0.24f), accent, parent);
+        CreateDecorationBlock("Mission Operations Door Frame North", new Vector3(frameX, position.y + doorHeight * 0.5f, position.z + doorWidth * 0.5f), new Vector3(0.18f, doorHeight, 0.24f), accent, parent);
+        CreateDecorationBlock("Mission Operations Door Frame Header", new Vector3(frameX, position.y + doorHeight, position.z), new Vector3(0.18f, 0.24f, doorWidth), accent, parent);
+        CreateDecorationBlock("Mission Operations Threshold", new Vector3(entranceWallX, position.y + 0.08f, position.z), new Vector3(1.1f, 0.06f, doorWidth - 0.35f), accent, parent);
+
+        CreateLargeRoomStructure(RoomType.IntelCenter, position, roomWidth, roomDepth, roomHeight, entranceWallX, outerWallX, side, doorWidth, accent, parent);
+        CreateRoomLightingGrid("Mission Operations", position, roomWidth, roomDepth, roomHeight, accent, parent);
+
+        // Raised operations floor around the table.
+        CreateBlock("Mission Operations Dais Floor", position + new Vector3(0f, 0.15f, 0f), new Vector3(12f, 0.3f, 9f), new Color(0.18f, 0.21f, 0.23f), parent);
+        CreateDecorationBlock("Mission Operations Dais Edge Light", position + new Vector3(0f, 0.31f, -4.45f), new Vector3(12f, 0.04f, 0.08f), accent, parent);
+        CreateDecorationBlock("Mission Operations Dais Edge Light North", position + new Vector3(0f, 0.31f, 4.45f), new Vector3(12f, 0.04f, 0.08f), accent, parent);
+
+        GameObject table = CreateBriefingTable(position + new Vector3(0f, 0.3f, 0f), accent, parent);
+        if (flow != null && flow.missions.Count > 0)
+        {
+            table.AddComponent<MissionTerminal>();
+        }
+
+        // Wall displays: a large screen on the outer wall facing the door, and
+        // smaller status panels along the north and south walls.
+        float screenX = outerWallX - side * 0.22f;
+        CreateDecorationBlock("Mission Operations Main Screen", new Vector3(screenX, position.y + roomHeight * 0.5f, position.z), new Vector3(0.08f, roomHeight * 0.45f, roomDepth * 0.45f), new Color(0.08f, 0.32f, 0.38f), parent);
+        CreateDecorationBlock("Mission Operations Main Screen Frame", new Vector3(screenX + side * 0.05f, position.y + roomHeight * 0.5f, position.z), new Vector3(0.06f, roomHeight * 0.45f + 0.3f, roomDepth * 0.45f + 0.3f), new Color(0.1f, 0.12f, 0.13f), parent);
+        for (int panel = -1; panel <= 1; panel += 2)
+        {
+            for (int slot = 0; slot < 3; slot++)
+            {
+                float x = entranceWallX + side * (roomWidth * (0.3f + slot * 0.22f));
+                CreateDecorationBlock(
+                    $"Mission Operations Status Screen {(panel < 0 ? "S" : "N")}{slot + 1}",
+                    new Vector3(x, position.y + 2.4f, position.z + panel * (roomDepth * 0.5f - 0.22f)),
+                    new Vector3(3f, 1.6f, 0.06f),
+                    new Color(0.06f, 0.26f, 0.3f),
+                    parent);
+                CreateFacilityProp(
+                    "Models/Facility/ServerRack",
+                    $"Mission Operations Console Rack {(panel < 0 ? "S" : "N")}{slot + 1}",
+                    new Vector3(x, position.y, position.z + panel * (roomDepth * 0.5f - 1.1f)),
+                    new Vector3(0f, panel < 0 ? 0f : 180f, 0f),
+                    Vector3.one,
+                    new Vector3(1.1f, 2.8f, 1.1f),
+                    new Vector3(0f, 1.4f, 0f),
+                    parent);
+            }
+        }
+
+        CreateWorldLabel("MISSION OPERATIONS", new Vector3(frameX, position.y + doorHeight + 0.5f, position.z), Color.white, 0.15f, parent);
+        CreateWorldLabel("MISSION OPERATIONS", new Vector3(screenX - side * 0.1f, position.y + roomHeight * 0.5f + roomHeight * 0.26f, position.z), Color.white, 0.24f, parent);
+    }
+
+    // A proper briefing table built from parts: pedestal base, thick tabletop
+    // with lit edges, a glowing map surface, and a holographic projection above
+    // it. The root carries the interaction collider.
+    private GameObject CreateBriefingTable(Vector3 floorPosition, Color accent, Transform parent)
+    {
+        const float topWidth = 6.4f;
+        const float topDepth = 3.6f;
+        const float tableHeight = 1.05f;
+        Color frameColor = new Color(0.12f, 0.14f, 0.155f);
+        Color baseColor = new Color(0.09f, 0.1f, 0.11f);
+
+        GameObject table = new GameObject("Mission Briefing Table");
+        table.transform.SetParent(parent, false);
+        table.transform.position = floorPosition;
+        Transform t = table.transform;
+
+        // Pedestal base: a wide plinth and two support columns.
+        CreateBlock("Briefing Table Plinth", floorPosition + new Vector3(0f, 0.08f, 0f), new Vector3(topWidth - 1.4f, 0.16f, topDepth - 1f), baseColor, t);
+        for (int leg = -1; leg <= 1; leg += 2)
+        {
+            CreateBlock($"Briefing Table Support Post {(leg < 0 ? "A" : "B")}", floorPosition + new Vector3(leg * (topWidth * 0.3f), tableHeight * 0.5f, 0f), new Vector3(0.7f, tableHeight - 0.2f, topDepth - 1.4f), frameColor, t);
+        }
+
+        // Tabletop with a lit edge and an inset map surface.
+        float topY = floorPosition.y + tableHeight;
+        CreateBlock("Briefing Table Top Bench", new Vector3(floorPosition.x, topY - 0.09f, floorPosition.z), new Vector3(topWidth, 0.18f, topDepth), frameColor, t);
+        CreateDecorationBlock("Briefing Table Map Screen", new Vector3(floorPosition.x, topY + 0.005f, floorPosition.z), new Vector3(topWidth - 0.5f, 0.02f, topDepth - 0.5f), new Color(0.05f, 0.28f, 0.32f), t);
+        for (int edge = -1; edge <= 1; edge += 2)
+        {
+            CreateDecorationBlock($"Briefing Table Edge Light Long {edge}", new Vector3(floorPosition.x, topY - 0.09f, floorPosition.z + edge * topDepth * 0.5f), new Vector3(topWidth + 0.02f, 0.05f, 0.04f), accent, t);
+            CreateDecorationBlock($"Briefing Table Edge Light Short {edge}", new Vector3(floorPosition.x + edge * topWidth * 0.5f, topY - 0.09f, floorPosition.z), new Vector3(0.04f, 0.05f, topDepth + 0.02f), accent, t);
+        }
+
+        // Holographic projection floating over the table.
+        Color holo = new Color(0.25f, 0.9f, 0.95f);
+        CreateDecorationBlock("Briefing Holo Screen Ring", new Vector3(floorPosition.x, topY + 0.9f, floorPosition.z), new Vector3(2.6f, 0.03f, 1.6f), holo, t);
+        CreateDecorationBlock("Briefing Holo Screen Core", new Vector3(floorPosition.x, topY + 0.55f, floorPosition.z), new Vector3(0.05f, 0.7f, 0.05f), holo, t);
+        CreateDecorationBlock("Briefing Holo Screen Tower A", new Vector3(floorPosition.x - 0.7f, topY + 0.3f, floorPosition.z + 0.3f), new Vector3(0.35f, 0.6f, 0.35f), Color.Lerp(holo, Color.black, 0.35f), t);
+        CreateDecorationBlock("Briefing Holo Screen Tower B", new Vector3(floorPosition.x + 0.6f, topY + 0.2f, floorPosition.z - 0.4f), new Vector3(0.5f, 0.4f, 0.4f), Color.Lerp(holo, Color.black, 0.35f), t);
+
+        GameObject holoLightObject = new GameObject("Briefing Holo Light");
+        holoLightObject.transform.SetParent(t, false);
+        holoLightObject.transform.position = new Vector3(floorPosition.x, topY + 0.8f, floorPosition.z);
+        Light holoLight = holoLightObject.AddComponent<Light>();
+        holoLight.type = LightType.Point;
+        holoLight.color = holo;
+        holoLight.range = 6f;
+        holoLight.intensity = 1.6f;
+        holoLight.shadows = LightShadows.None;
+
+        BoxCollider interaction = table.AddComponent<BoxCollider>();
+        interaction.center = new Vector3(0f, tableHeight * 0.5f, 0f);
+        interaction.size = new Vector3(topWidth, tableHeight, topDepth);
+
+        CreateWorldLabel("SELECT CONTRACT\nE  ACCESS", new Vector3(floorPosition.x, topY + 1.45f, floorPosition.z), Color.white, 0.12f, t);
+        return table;
     }
 
     private void CreateHubRoomBays()
     {
         foreach (LairRoomSpec spec in LairRoomSpecs)
         {
-            if (spec.isRecruitQuarters) continue;
+            if (spec.isRecruitQuarters || spec.isMissionRoom) continue;
             CreateHubRoomBay(spec, GetHubRoomAccentColor(spec.roomType));
         }
     }
