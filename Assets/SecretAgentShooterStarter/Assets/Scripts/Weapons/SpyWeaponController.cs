@@ -50,11 +50,46 @@ public class SpyWeaponController : MonoBehaviour
     private bool presentationVisible = true;
     private bool shoulderCarryPresentation;
     private readonly Dictionary<string, AmmoState> ammoByWeapon = new Dictionary<string, AmmoState>();
+    private readonly HashSet<string> weaponsInBulletMode = new HashSet<string>();
+    private bool bulletMode;
 
     public bool IsPistolEquipped => currentWeapon == null || currentWeapon.weaponClass == WeaponClass.Pistol;
     public bool IsReloading => reloadRoutine != null;
-    public int MagazineSize => currentWeapon != null ? Mathf.Max(1, currentWeapon.magazineSize) : 12;
-    public int MaxReserveAmmo => currentWeapon != null ? Mathf.Max(0, currentWeapon.maxReserveAmmo) : 144;
+    public bool InBulletMode => bulletMode;
+    public bool HasDualAmmo => currentWeapon != null && currentWeapon.dualAmmo;
+    public int MagazineSize => currentWeapon == null
+        ? 12
+        : Mathf.Max(1, bulletMode ? currentWeapon.bulletMagazineSize : currentWeapon.magazineSize);
+    public int MaxReserveAmmo => currentWeapon == null
+        ? 144
+        : Mathf.Max(0, bulletMode ? currentWeapon.bulletMaxReserveAmmo : currentWeapon.maxReserveAmmo);
+    private int StartingReserveAmmo => currentWeapon == null
+        ? 36
+        : bulletMode ? currentWeapon.bulletStartingReserveAmmo : currentWeapon.startingReserveAmmo;
+
+    /// <summary>The round the weapon is firing right now.</summary>
+    public WeaponRound CurrentRound => currentWeapon == null
+        ? WeaponRound.Dart
+        : bulletMode ? WeaponRound.Bullet : currentWeapon.round;
+
+    public string AmmoTypeLabel
+    {
+        get
+        {
+            switch (CurrentRound)
+            {
+                case WeaponRound.Dart: return "DARTS";
+                case WeaponRound.ShockBolt: return "SHOCK";
+                case WeaponRound.Grenade: return "GRENADES";
+                case WeaponRound.Rocket: return "ROCKETS";
+                default: return "BULLETS";
+            }
+        }
+    }
+
+    private string AmmoKey => currentWeapon == null
+        ? string.Empty
+        : bulletMode ? currentWeapon.weaponId + "#bullets" : currentWeapon.weaponId;
     public IReadOnlyList<WeaponDefinition> AvailableWeapons => GetAvailableWeapons(false);
     public float RecoilAmount => recoilAmount;
 
@@ -89,9 +124,21 @@ public class SpyWeaponController : MonoBehaviour
 
         currentWeapon = weapon;
         loadedWeaponId = weapon.weaponId;
+        bulletMode = weapon.dualAmmo && weaponsInBulletMode.Contains(weapon.weaponId);
         RefreshWeaponVisual();
+        LoadAmmoState();
 
-        if (ammoByWeapon.TryGetValue(weapon.weaponId, out AmmoState savedState))
+        ammoInitialized = true;
+        if (grantPickupAmmo)
+        {
+            AddAmmo(bulletMode ? weapon.bulletAmmoPerPickup : weapon.ammoPerPickup);
+        }
+        SaveCurrentAmmoState();
+    }
+
+    private void LoadAmmoState()
+    {
+        if (ammoByWeapon.TryGetValue(AmmoKey, out AmmoState savedState))
         {
             magazineAmmo = Mathf.Clamp(savedState.magazine, 0, MagazineSize);
             reserveAmmo = Mathf.Clamp(savedState.reserve, 0, MaxReserveAmmo);
@@ -99,15 +146,41 @@ public class SpyWeaponController : MonoBehaviour
         else
         {
             magazineAmmo = MagazineSize;
-            reserveAmmo = Mathf.Clamp(weapon.startingReserveAmmo, 0, MaxReserveAmmo);
+            reserveAmmo = Mathf.Clamp(StartingReserveAmmo, 0, MaxReserveAmmo);
+        }
+    }
+
+    /// <summary>
+    /// Swaps a dual-use weapon between tranquilizer darts and lethal bullets.
+    /// Each ammo type keeps its own magazine and reserve.
+    /// </summary>
+    public bool TryToggleAmmoType()
+    {
+        EnsureAmmoInitialized();
+        if (currentWeapon == null) return false;
+        if (!currentWeapon.dualAmmo)
+        {
+            SetFeedback($"{currentWeapon.weaponName.ToUpperInvariant()}: {AmmoTypeLabel} ONLY", false, 0.8f);
+            return false;
         }
 
-        ammoInitialized = true;
-        if (grantPickupAmmo)
+        if (reloadRoutine != null)
         {
-            AddAmmo(weapon.ammoPerPickup);
+            StopCoroutine(reloadRoutine);
+            reloadRoutine = null;
         }
+
         SaveCurrentAmmoState();
+        bulletMode = !bulletMode;
+        if (bulletMode) weaponsInBulletMode.Add(currentWeapon.weaponId);
+        else weaponsInBulletMode.Remove(currentWeapon.weaponId);
+        LoadAmmoState();
+        SaveCurrentAmmoState();
+
+        nextFireTime = Mathf.Max(nextFireTime, Time.time + 0.45f);
+        audioEmitter?.PlayReloadStart();
+        SetFeedback($"LOADED: {AmmoTypeLabel}", false, 0.9f);
+        return true;
     }
 
     public bool TrySelectWeaponSlot(int slotIndex, bool pistolsOnly)
@@ -167,7 +240,7 @@ public class SpyWeaponController : MonoBehaviour
 
         reloadRoutine = StartCoroutine(ReloadRoutine());
         audioEmitter?.PlayReloadStart();
-        SetFeedback("RELOADING", false, reloadDuration);
+        SetFeedback("RELOADING", false, CurrentReloadDuration);
         return true;
     }
 
@@ -304,17 +377,7 @@ public class SpyWeaponController : MonoBehaviour
 
     private static string GetWeaponModelResourcePath(string weaponId)
     {
-        switch (weaponId)
-        {
-            case "dart-smg":
-                return "Models/Weapons/SedativeSMG";
-            case "tranq-rifle":
-                return "Models/Weapons/PrecisionRifle";
-            case "shock-pistol":
-                return "Models/Weapons/ShockPistol";
-            default:
-                return "Models/Weapons/TranquilizerPistol";
-        }
+        return WeaponDefinition.GetModelResourcePath(weaponId);
     }
 
     private static void SetLayerRecursively(GameObject target, int layer)
@@ -340,10 +403,23 @@ public class SpyWeaponController : MonoBehaviour
             return false;
         }
 
+        WeaponRound round = CurrentRound;
         float fireRate = currentWeapon != null ? currentWeapon.fireRate : 0.45f;
         float range = currentWeapon != null ? currentWeapon.range : 80f;
-        float sedation = currentWeapon != null ? currentWeapon.sedationDamage : 35f;
-        float lethal = currentWeapon != null ? currentWeapon.lethalDamage : 0f;
+        float sedation = 0f;
+        float lethal = 0f;
+        if (round == WeaponRound.Dart || round == WeaponRound.ShockBolt)
+        {
+            sedation = currentWeapon != null ? currentWeapon.sedationDamage : 35f;
+        }
+        else if (round == WeaponRound.Bullet)
+        {
+            lethal = currentWeapon == null ? 0f : bulletMode ? currentWeapon.bulletDamage : currentWeapon.lethalDamage;
+        }
+        else if (currentWeapon != null)
+        {
+            lethal = currentWeapon.lethalDamage;
+        }
         SecretLairManager lair = SecretLairManager.Instance;
         if (lair != null)
         {
@@ -362,6 +438,12 @@ public class SpyWeaponController : MonoBehaviour
         Vector3 direction = aimCamera != null ? aimCamera.transform.forward : transform.forward;
         ReportWeaponNoise(origin);
 
+        if (currentWeapon != null && currentWeapon.IsExplosive)
+        {
+            FireExplosive(origin, direction, range, lethal);
+            return true;
+        }
+
         GameObject projectilePrefab = currentWeapon != null ? currentWeapon.projectilePrefab : null;
         if (projectilePrefab != null && muzzle != null)
         {
@@ -379,7 +461,7 @@ public class SpyWeaponController : MonoBehaviour
         Vector3 shotStart = muzzle != null ? muzzle.position : origin + direction * 0.4f;
         Vector3 shotEnd = origin + direction * range;
         bool hitSomething = TryGetShotHit(origin, direction, range, out RaycastHit hit);
-        bool firesDarts = FiresDarts(currentWeapon);
+        bool firesDarts = round == WeaponRound.Dart;
         EnemyOperative enemy = null;
         MissionSecurityCamera securityCamera = null;
         Transform stickTo = null;
@@ -420,10 +502,19 @@ public class SpyWeaponController : MonoBehaviour
                     enemy.TakeDamage(headshot ? lethal * 3f : lethal);
                 }
 
-                string message = enemy.isKnockedOut
-                    ? headshot ? "HEADSHOT  -  TARGET SEDATED" : "TARGET SEDATED"
-                    : $"SEDATION {Mathf.CeilToInt(enemy.sedation)}/{Mathf.CeilToInt(enemy.SedationThreshold)}";
-                SetFeedback(message, true, 0.8f);
+                string message;
+                if (lethal > 0f)
+                {
+                    message = enemy.isDead ? headshot ? "HEADSHOT  -  TARGET DOWN" : "TARGET DOWN" : string.Empty;
+                }
+                else
+                {
+                    message = enemy.isKnockedOut
+                        ? headshot ? "HEADSHOT  -  TARGET SEDATED" : "TARGET SEDATED"
+                        : $"SEDATION {Mathf.CeilToInt(enemy.sedation)}/{Mathf.CeilToInt(enemy.SedationThreshold)}";
+                }
+
+                if (!string.IsNullOrEmpty(message)) SetFeedback(message, true, 0.8f);
             }
             else if (securityCamera != null && securityCamera.ReceiveWeaponHit(impactPoint))
             {
@@ -437,6 +528,11 @@ public class SpyWeaponController : MonoBehaviour
         {
             ShotProjectileVisual.Fire(shotStart, shotEnd, true, hitSomething, stickTo, applyHit);
         }
+        else if (round == WeaponRound.ShockBolt)
+        {
+            applyHit();
+            ShotProjectileVisual.FireShockBolt(shotStart, shotEnd, hitSomething);
+        }
         else
         {
             applyHit();
@@ -446,12 +542,57 @@ public class SpyWeaponController : MonoBehaviour
         return true;
     }
 
+    // Grenades and rockets: a real projectile that flies from the muzzle
+    // toward the crosshair and explodes on impact, hurting everyone nearby.
+    private void FireExplosive(Vector3 origin, Vector3 direction, float range, float damage)
+    {
+        Vector3 start = muzzle != null ? muzzle.position + direction * 0.3f : origin + direction * 0.6f;
+        Vector3 aimPoint = TryGetShotHit(origin, direction, range, out RaycastHit hit)
+            ? hit.point
+            : origin + direction * range;
+        Vector3 launch = (aimPoint - start).normalized;
+        if (currentWeapon.projectileArcs)
+        {
+            // Lob slightly so grenades carry to mid range.
+            launch = (direction + Vector3.up * 0.08f).normalized;
+        }
+
+        SpawnMuzzleFlash();
+        ExplosiveProjectile.Launch(
+            start,
+            launch,
+            currentWeapon.projectileSpeed,
+            currentWeapon.projectileArcs,
+            currentWeapon.blastRadius,
+            damage,
+            currentWeapon.round == WeaponRound.Rocket,
+            range,
+            transform,
+            this);
+    }
+
     private void ReportWeaponNoise(Vector3 sourcePosition)
     {
         WeaponClass weaponClass = currentWeapon != null
             ? currentWeapon.weaponClass
             : WeaponClass.Pistol;
         float hearingRange;
+        WeaponRound round = CurrentRound;
+        if (round == WeaponRound.Grenade || round == WeaponRound.Rocket)
+        {
+            // The launch itself; the blast makes its own, louder noise.
+            EnemyCombatController.BroadcastNoise(sourcePosition, 25f, true, "a launcher firing");
+            return;
+        }
+
+        if (round == WeaponRound.Bullet)
+        {
+            // Lethal rounds are loud: unsuppressed gunfire carries.
+            hearingRange = weaponClass == WeaponClass.Pistol ? 16f : weaponClass == WeaponClass.SubmachineGun ? 22f : 26f;
+            EnemyCombatController.BroadcastNoise(sourcePosition, hearingRange, true, "gunfire");
+            return;
+        }
+
         switch (weaponClass)
         {
             case WeaponClass.SubmachineGun:
@@ -479,9 +620,13 @@ public class SpyWeaponController : MonoBehaviour
             "a weapon discharge");
     }
 
+    private float CurrentReloadDuration => currentWeapon != null && currentWeapon.reloadDuration > 0f
+        ? currentWeapon.reloadDuration
+        : reloadDuration;
+
     private IEnumerator ReloadRoutine()
     {
-        yield return new WaitForSeconds(reloadDuration);
+        yield return new WaitForSeconds(CurrentReloadDuration);
 
         int needed = MagazineSize - magazineAmmo;
         int transferred = Mathf.Min(needed, reserveAmmo);
@@ -498,8 +643,9 @@ public class SpyWeaponController : MonoBehaviour
         if (currentWeapon == null || (ammoInitialized && loadedWeaponId == currentWeapon.weaponId)) return;
 
         loadedWeaponId = currentWeapon.weaponId;
+        bulletMode = currentWeapon.dualAmmo && weaponsInBulletMode.Contains(currentWeapon.weaponId);
         magazineAmmo = MagazineSize;
-        reserveAmmo = Mathf.Clamp(currentWeapon.startingReserveAmmo, 0, MaxReserveAmmo);
+        reserveAmmo = Mathf.Clamp(StartingReserveAmmo, 0, MaxReserveAmmo);
         ammoInitialized = true;
         SaveCurrentAmmoState();
     }
@@ -507,7 +653,7 @@ public class SpyWeaponController : MonoBehaviour
     private void SaveCurrentAmmoState()
     {
         if (!ammoInitialized || currentWeapon == null || string.IsNullOrEmpty(currentWeapon.weaponId)) return;
-        ammoByWeapon[currentWeapon.weaponId] = new AmmoState
+        ammoByWeapon[AmmoKey] = new AmmoState
         {
             magazine = magazineAmmo,
             reserve = reserveAmmo
@@ -595,13 +741,6 @@ public class SpyWeaponController : MonoBehaviour
         return foundHit;
     }
 
-    // Tranquilizer weapons fire visible darts; everything else fires bullets.
-    private static bool FiresDarts(WeaponDefinition weapon)
-    {
-        if (weapon == null) return true;
-        string id = weapon.weaponId ?? string.Empty;
-        return id.Contains("tranq") || id.Contains("dart");
-    }
 
     private void SetFeedback(string message, bool hitEnemy, float duration)
     {
@@ -614,8 +753,30 @@ public class SpyWeaponController : MonoBehaviour
     {
         if (muzzle == null) return;
 
-        Color flashColor = FiresDarts(currentWeapon) ? new Color(0.75f, 0.95f, 1f) : new Color(1f, 0.78f, 0.35f);
-        GameObject flash = CreateEffectSphere("Muzzle Flash", muzzle.position + muzzle.forward * 0.25f, flashColor, FiresDarts(currentWeapon) ? 0.09f : 0.16f);
+        Color flashColor;
+        float flashSize;
+        switch (CurrentRound)
+        {
+            case WeaponRound.Dart:
+                flashColor = new Color(0.75f, 0.95f, 1f);
+                flashSize = 0.09f;
+                break;
+            case WeaponRound.ShockBolt:
+                flashColor = new Color(0.45f, 0.75f, 1f);
+                flashSize = 0.13f;
+                break;
+            case WeaponRound.Grenade:
+            case WeaponRound.Rocket:
+                flashColor = new Color(1f, 0.6f, 0.25f);
+                flashSize = 0.3f;
+                break;
+            default:
+                flashColor = new Color(1f, 0.78f, 0.35f);
+                flashSize = 0.16f;
+                break;
+        }
+
+        GameObject flash = CreateEffectSphere("Muzzle Flash", muzzle.position + muzzle.forward * 0.25f, flashColor, flashSize);
         Destroy(flash, 0.1f);
     }
 

@@ -8358,7 +8358,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
             if (weapon == null) continue;
             bool unlocked = lair != null && lair.IsWeaponUnlocked(weapon.weaponId);
             int displayLevel = unlocked ? 0 : Mathf.Clamp(weapon.unlockedAtArmoryLevel - 1, 0, levelVisuals.Length - 1);
-            Vector3 displayPosition = position + Spread(new Vector3(-2.25f + i * 1.5f, 1.3f, 2.1f));
+            float slot = i - (flow.weaponCatalog.Count - 1) * 0.5f;
+            Vector3 displayPosition = position + Spread(new Vector3(slot * 1.2f, 1.3f, 2.1f));
             Color color = unlocked ? GetWeaponColor(weapon.weaponClass) : new Color(0.14f, 0.15f, 0.16f);
             GameObject display = CreateBlock(
                 $"Armory Display - {weapon.weaponName}",
@@ -8644,17 +8645,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
     private static string GetWeaponModelResourcePath(string weaponId)
     {
-        switch (weaponId)
-        {
-            case "dart-smg":
-                return "Models/Weapons/SedativeSMG";
-            case "tranq-rifle":
-                return "Models/Weapons/PrecisionRifle";
-            case "shock-pistol":
-                return "Models/Weapons/ShockPistol";
-            default:
-                return "Models/Weapons/TranquilizerPistol";
-        }
+        return WeaponDefinition.GetModelResourcePath(weaponId);
     }
 
     private static Color GetWeaponColor(WeaponClass weaponClass)

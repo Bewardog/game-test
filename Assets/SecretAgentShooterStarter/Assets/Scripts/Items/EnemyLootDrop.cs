@@ -128,17 +128,7 @@ public class EnemyLootDrop : MonoBehaviour
 
     private static string GetWeaponModelResourcePath(string weaponId)
     {
-        switch (weaponId)
-        {
-            case "dart-smg":
-                return "Models/Weapons/SedativeSMG";
-            case "tranq-rifle":
-                return "Models/Weapons/PrecisionRifle";
-            case "shock-pistol":
-                return "Models/Weapons/ShockPistol";
-            default:
-                return "Models/Weapons/TranquilizerPistol";
-        }
+        return WeaponDefinition.GetModelResourcePath(weaponId);
     }
 
     private static Color GetWeaponColor(WeaponClass weaponClass)

@@ -152,6 +152,11 @@ public class PrototypeHUD : MonoBehaviour
         string weaponName = weapon != null && weapon.currentWeapon != null
             ? weapon.currentWeapon.weaponName.ToUpperInvariant()
             : "TRANQUILIZER PISTOL";
+        if (weapon != null && weapon.currentWeapon != null)
+        {
+            weaponName += $"   {weapon.AmmoTypeLabel}";
+            if (weapon.HasDualAmmo) weaponName += "  (X)";
+        }
 
         Rect panel = new Rect(Screen.width - 260f, Screen.height - 82f, 244f, 64f);
         DrawPanel(panel);
@@ -230,7 +235,7 @@ public class PrototypeHUD : MonoBehaviour
 
     private void DrawControls()
     {
-        string controls = "CTRL  CROUCH    1-4 / WHEEL  WEAPONS    R  RELOAD    F  PUNCH    Q  KNIFE    M  MAP    V  CAMERA    B  CARRY";
+        string controls = "CTRL  CROUCH    1-7 / WHEEL  WEAPONS    X  AMMO    R  RELOAD    F  PUNCH    Q  KNIFE    M  MAP    V  CAMERA    B  CARRY";
         GUI.Label(new Rect(252f, Screen.height - 25f, Mathf.Max(0f, Screen.width - 528f), 18f), controls, tinyStyle);
     }
 

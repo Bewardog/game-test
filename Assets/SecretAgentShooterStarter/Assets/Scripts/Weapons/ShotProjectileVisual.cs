@@ -50,6 +50,75 @@ public class ShotProjectileVisual : MonoBehaviour
         visual.onArrive = onArrive;
     }
 
+    /// <summary>
+    /// The shock pistol's electric bolt: a jagged blue arc from the muzzle to
+    /// the hit point that flickers for a moment, with a spark where it lands.
+    /// </summary>
+    public static void FireShockBolt(Vector3 start, Vector3 end, bool hitSurface)
+    {
+        GameObject bolt = new GameObject("Shock Bolt");
+        LineRenderer line = bolt.AddComponent<LineRenderer>();
+        Vector3 span = end - start;
+        float length = span.magnitude;
+        int segments = Mathf.Clamp(Mathf.CeilToInt(length / 0.8f), 4, 40);
+        Vector3 side = Vector3.Cross(span.normalized, Vector3.up);
+        if (side.sqrMagnitude < 0.01f) side = Vector3.right;
+        side.Normalize();
+        Vector3 up = Vector3.Cross(side, span.normalized);
+
+        line.useWorldSpace = true;
+        line.positionCount = segments + 1;
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float jitter = (i == 0 || i == segments) ? 0f : 0.12f;
+            Vector3 offset = side * Random.Range(-jitter, jitter) + up * Random.Range(-jitter, jitter);
+            line.SetPosition(i, Vector3.Lerp(start, end, t) + offset);
+        }
+
+        line.startWidth = 0.05f;
+        line.endWidth = 0.025f;
+        line.numCapVertices = 2;
+        line.startColor = new Color(0.75f, 0.9f, 1f, 1f);
+        line.endColor = new Color(0.3f, 0.6f, 1f, 0.8f);
+        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        if (trailShader == null)
+        {
+            trailShader = Shader.Find("Sprites/Default");
+            if (trailShader == null) trailShader = Shader.Find("Universal Render Pipeline/Unlit");
+        }
+
+        if (trailShader != null) line.material = new Material(trailShader);
+        Destroy(bolt, 0.09f);
+
+        if (!hitSurface) return;
+        GameObject spark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        spark.name = "Shock Bolt Spark";
+        Collider sparkCollider = spark.GetComponent<Collider>();
+        if (sparkCollider != null)
+        {
+            sparkCollider.enabled = false;
+            Destroy(sparkCollider);
+        }
+
+        spark.transform.position = end;
+        spark.transform.localScale = Vector3.one * 0.16f;
+        Renderer sparkRenderer = spark.GetComponent<Renderer>();
+        if (sparkRenderer != null)
+        {
+            sparkRenderer.material.color = new Color(0.55f, 0.8f, 1f);
+            sparkRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        Light glow = spark.AddComponent<Light>();
+        glow.type = LightType.Point;
+        glow.color = new Color(0.45f, 0.7f, 1f);
+        glow.range = 3f;
+        glow.intensity = 2.5f;
+        glow.shadows = LightShadows.None;
+        Destroy(spark, 0.15f);
+    }
+
     private void Update()
     {
         transform.position = Vector3.MoveTowards(transform.position, target, speed * Time.deltaTime);

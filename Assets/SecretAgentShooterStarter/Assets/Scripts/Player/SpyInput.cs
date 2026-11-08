@@ -121,6 +121,7 @@ public static class SpyInput
     public static bool MapPressed => KeyPressedThisFrame(SpyKey.M);
     public static bool PunchPressed => KeyPressedThisFrame(SpyKey.F);
     public static bool KnifePressed => KeyPressedThisFrame(SpyKey.Q);
+    public static bool AmmoSwitchPressed => KeyPressedThisFrame(SpyKey.X);
     public static bool MenuUpPressed => KeyPressedThisFrame(SpyKey.Up);
     public static bool MenuDownPressed => KeyPressedThisFrame(SpyKey.Down);
     public static bool MenuLeftPressed => KeyPressedThisFrame(SpyKey.Left);
@@ -139,6 +140,9 @@ public static class SpyInput
                 if (Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame) return 1;
                 if (Keyboard.current.digit3Key.wasPressedThisFrame || Keyboard.current.numpad3Key.wasPressedThisFrame) return 2;
                 if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame) return 3;
+                if (Keyboard.current.digit5Key.wasPressedThisFrame || Keyboard.current.numpad5Key.wasPressedThisFrame) return 4;
+                if (Keyboard.current.digit6Key.wasPressedThisFrame || Keyboard.current.numpad6Key.wasPressedThisFrame) return 5;
+                if (Keyboard.current.digit7Key.wasPressedThisFrame || Keyboard.current.numpad7Key.wasPressedThisFrame) return 6;
             }
 #endif
 
@@ -147,6 +151,9 @@ public static class SpyInput
             if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) return 1;
             if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) return 2;
             if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4)) return 3;
+            if (Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5)) return 4;
+            if (Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6)) return 5;
+            if (Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7)) return 6;
 #endif
 
             return -1;
@@ -203,6 +210,8 @@ public static class SpyInput
                     return Keyboard.current.fKey.wasPressedThisFrame;
                 case SpyKey.Q:
                     return Keyboard.current.qKey.wasPressedThisFrame;
+                case SpyKey.X:
+                    return Keyboard.current.xKey.wasPressedThisFrame;
                 case SpyKey.Up:
                     return Keyboard.current.wKey.wasPressedThisFrame ||
                         Keyboard.current.upArrowKey.wasPressedThisFrame;
@@ -247,6 +256,8 @@ public static class SpyInput
                 return Input.GetKeyDown(KeyCode.F);
             case SpyKey.Q:
                 return Input.GetKeyDown(KeyCode.Q);
+            case SpyKey.X:
+                return Input.GetKeyDown(KeyCode.X);
             case SpyKey.Up:
                 return Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow);
             case SpyKey.Down:
@@ -279,6 +290,7 @@ public static class SpyInput
         M,
         F,
         Q,
+        X,
         Up,
         Down,
         Left,

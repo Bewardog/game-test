@@ -41,10 +41,34 @@ public class GameFlowManager : MonoBehaviour
 
         if (weaponCatalog.Count == 0)
         {
-            weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-pistol", "Tranquilizer Pistol", WeaponClass.Pistol, 35f, 0f, 0.45f, 80f, 12, 0));
-            weaponCatalog.Add(WeaponDefinition.CreateRuntime("dart-smg", "Sedative SMG", WeaponClass.SubmachineGun, 18f, 0f, 0.14f, 55f, 30, 1));
-            weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-rifle", "Precision Tranquilizer Rifle", WeaponClass.Rifle, 70f, 0f, 1.05f, 140f, 8, 2));
-            weaponCatalog.Add(WeaponDefinition.CreateRuntime("shock-pistol", "Shock Pistol", WeaponClass.Pistol, 48f, 0f, 0.7f, 65f, 10, 3));
+            // Ids stay the same as before so existing saves keep their unlocks.
+            // Pistol and precision rifle are dual-use (darts or bullets, X to
+            // switch); the SMG and assault rifle fire bullets only; the shock
+            // pistol stuns; the launchers fire explosives for groups.
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-pistol", "Tranquilizer Pistol", WeaponClass.Pistol, 35f, 0f, 0.45f, 80f, 12, 0)
+                .WithRound(WeaponRound.Dart)
+                .WithBulletMode(34f, 12, 36, 120, 12));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("dart-smg", "Combat SMG", WeaponClass.SubmachineGun, 0f, 16f, 0.1f, 60f, 30, 1)
+                .WithRound(WeaponRound.Bullet));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-rifle", "Precision Rifle", WeaponClass.Rifle, 70f, 0f, 1.05f, 140f, 8, 2)
+                .WithRound(WeaponRound.Dart)
+                .WithBulletMode(95f, 5, 20, 60, 5));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("assault-rifle", "Assault Rifle", WeaponClass.Rifle, 0f, 24f, 0.12f, 110f, 30, 2)
+                .WithRound(WeaponRound.Bullet)
+                .WithMagazine(30, 90, 270)
+                .WithReload(1.6f));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("shock-pistol", "Shock Pistol", WeaponClass.Pistol, 48f, 0f, 0.7f, 65f, 10, 3)
+                .WithRound(WeaponRound.ShockBolt));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("grenade-launcher", "Grenade Launcher", WeaponClass.Heavy, 0f, 110f, 0.85f, 60f, 3, 3)
+                .WithRound(WeaponRound.Grenade)
+                .WithMagazine(6, 12, 30)
+                .WithExplosive(5f, 30f, true)
+                .WithReload(2.4f));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("rocket-launcher", "Rocket Launcher", WeaponClass.Heavy, 0f, 220f, 1.4f, 150f, 2, 4)
+                .WithRound(WeaponRound.Rocket)
+                .WithMagazine(1, 5, 10)
+                .WithExplosive(6.5f, 45f, false)
+                .WithReload(2.2f));
         }
 
         CampaignPersistence.LoadInto(this);

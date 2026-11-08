@@ -652,6 +652,11 @@ public class SpyPlayerController : MonoBehaviour
             TryCycleWeapon(cycleDirection);
         }
 
+        if (SpyInput.AmmoSwitchPressed)
+        {
+            weaponController?.TryToggleAmmoType();
+        }
+
         bool meleeRequested = SpyInput.PunchPressed || SpyInput.KnifePressed;
         if (meleeRequested)
         {

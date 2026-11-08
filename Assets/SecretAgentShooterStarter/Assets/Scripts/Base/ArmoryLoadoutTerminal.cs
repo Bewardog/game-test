@@ -18,7 +18,9 @@ public class ArmoryLoadoutTerminal : MonoBehaviour, IInteractable
 
         int currentIndex = available.FindIndex(weapon => weapon.weaponId == SecretLairManager.Instance.equippedWeaponId);
         WeaponDefinition nextWeapon = available[(currentIndex + 1 + available.Count) % available.Count];
-        SecretLairManager.Instance.EquipWeapon(nextWeapon);
+        // Weapons the armory has reached are unlocked when picked, so they also
+        // appear on the number keys and the scroll wheel.
+        SecretLairManager.Instance.UnlockWeapon(nextWeapon);
         player.WeaponController?.SetWeapon(nextWeapon, false);
         player.ShowActionMessage($"EQUIPPED: {nextWeapon.weaponName.ToUpperInvariant()}", 1.25f);
     }

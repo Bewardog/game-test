@@ -1,8 +1,11 @@
-"""Builds the four first-person weapon models as detailed hard-surface meshes.
+"""Builds the first-person weapon models as detailed hard-surface meshes.
 
 Run from Blender (or with the bpy module):
-    blender --background --python Tools/generate_weapon_models.py -- <output Models folder>
-    python3 Tools/generate_weapon_models.py -- <output Models folder>
+    blender --background --python Tools/generate_weapon_models.py -- <output Models folder> [Name,Name]
+    python3 Tools/generate_weapon_models.py -- <output Models folder> [Name,Name]
+
+The optional second argument builds only the named models (for example
+AssaultRifle,RocketLauncher); without it every model is built.
 
 Conventions match the original kit so the game can use the files unchanged:
 the barrel points along +Y, up is +Z, width is X, the grip sits below the
@@ -22,7 +25,9 @@ import bpy  # noqa: E402  (bpy must load before bmesh)
 import bmesh
 from mathutils import Vector
 
-OUTPUT_DIR = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else os.getcwd()
+ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+OUTPUT_DIR = ARGS[0] if ARGS else os.getcwd()
+ONLY = set(ARGS[1].split(",")) if len(ARGS) > 1 else None
 SHARP_ANGLE = math.radians(32.0)
 
 
@@ -520,7 +525,193 @@ def precision_rifle():
     export_model("PrecisionRifle")
 
 
-for builder in (tranquilizer_pistol, shock_pistol, sedative_smg, precision_rifle):
-    builder()
+def assault_rifle():
+    clear_scene()
+    p = Palette("AssaultRifle", (0.9, 0.46, 0.12), frame=(0.3, 0.26, 0.19))
+
+    # Flat-top upper receiver and a long free-float handguard with slots.
+    profile("Upper Receiver", [
+        (-0.36, 0.1), (0.26, 0.1), (0.26, 0.27), (-0.33, 0.27), (-0.36, 0.24),
+    ], 0.12, p.metal, bevel=0.01, segments=3)
+    box("Forward Assist", (0.066, -0.2, 0.2), (0.03, 0.06, 0.04), p.metal, bevel=0.006)
+    box("Ejection Port Cover", (0.062, -0.02, 0.19), (0.006, 0.17, 0.055), p.dark, bevel=0.003)
+    box("Brass Deflector", (0.068, -0.13, 0.245), (0.02, 0.04, 0.04), p.metal, bevel=0.006)
+    profile("Handguard", [
+        (0.25, 0.085), (0.8, 0.085), (0.82, 0.105), (0.82, 0.265), (0.8, 0.285), (0.25, 0.285),
+    ], 0.13, p.frame, bevel=0.012, segments=3)
+    for side in (-1, 1):
+        ribs(f"Handguard Slot {side}", 0.32, 0.76, 7, side * 0.0655, 0.185, (0.006, 0.045, 0.02), p.dark)
+    ribs("Handguard Bottom Slot", 0.32, 0.76, 7, 0.0, 0.082, (0.04, 0.045, 0.006), p.dark)
+    picatinny("Top Rail", -0.33, 0.8, 0.295, 0.08, p.metal)
+
+    # Barrel, gas block, and a slotted muzzle brake.
+    tube("Barrel", 0.8, 1.06, 0.022, p.metal, z=0.185)
+    box("Gas Block", (0.0, 0.84, 0.185), (0.05, 0.04, 0.06), p.metal, bevel=0.006)
+    tube("Muzzle Brake", 1.04, 1.15, 0.032, p.dark, z=0.185)
+    for side in (-1, 1):
+        ribs(f"Muzzle Brake Port {side}", 1.07, 1.12, 3, side * 0.03, 0.185, (0.008, 0.012, 0.03), p.metal)
+    tube("Muzzle Bore", 1.149, 1.153, 0.012, p.dark, z=0.185, bevel=0.0)
+
+    # Lower receiver, magazine well, and a curved steel magazine.
+    profile("Lower Receiver", [
+        (-0.33, 0.105), (0.22, 0.105), (0.22, 0.04), (0.14, 0.02), (-0.08, 0.02), (-0.33, 0.06),
+    ], 0.11, p.metal, bevel=0.008)
+    profile("Magazine", [
+        (0.02, 0.04), (0.14, 0.04), (0.16, -0.1), (0.24, -0.3), (0.13, -0.34), (0.06, -0.14),
+    ], 0.08, p.dark, bevel=0.01, segments=3)
+    for side in (-1, 1):
+        ribs(f"Magazine Rib {side}", -0.05, -0.25, 4, side * 0.041, 0.0, (0.004, 0.02, 0.01), p.metal)
+    profile("Magazine Base Plate", [(0.13, -0.33), (0.245, -0.29), (0.255, -0.315), (0.14, -0.36)],
+            0.09, p.accent, bevel=0.005)
+
+    # Pistol grip, trigger group, and controls.
+    profile("Pistol Grip", [
+        (-0.1, 0.03), (-0.115, -0.03), (-0.13, -0.08), (-0.135, -0.12), (-0.15, -0.17),
+        (-0.17, -0.28), (-0.29, -0.28), (-0.265, -0.1), (-0.24, 0.03),
+    ], 0.1, p.frame, bevel=0.012, segments=3)
+    for side in (-1, 1):
+        profile(f"Grip Texture Panel {side}", [(-0.13, -0.03), (-0.16, -0.24), (-0.27, -0.24), (-0.245, -0.03)],
+                0.006, p.texture, x=side * 0.051, bevel=0.002, segments=1)
+    stroke("Trigger Guard", [(0.0, 0.025), (0.01, -0.035), (-0.02, -0.06), (-0.11, -0.06)], 0.02, 0.06, p.metal)
+    stroke("Trigger", [(-0.05, 0.025), (-0.045, -0.005), (-0.055, -0.03)], 0.016, 0.025, p.metal)
+    box("Selector Lever", (-0.06, -0.19, 0.07), (0.01, 0.05, 0.022), p.accent, bevel=0.003)
+    box("Magazine Release", (0.058, 0.06, 0.06), (0.012, 0.03, 0.03), p.dark, bevel=0.003)
+    box("Charging Handle", (0.0, -0.37, 0.25), (0.08, 0.04, 0.025), p.dark, bevel=0.005)
+
+    # Buffer tube and an adjustable stock.
+    tube("Buffer Tube", -0.75, -0.34, 0.032, p.metal, z=0.19, vertices=20)
+    profile("Stock", [
+        (-0.58, 0.24), (-0.58, 0.13), (-0.66, 0.02), (-0.9, -0.01), (-0.93, 0.02), (-0.93, 0.25), (-0.88, 0.27), (-0.62, 0.27),
+    ], 0.09, p.frame, bevel=0.012, segments=3)
+    box("Butt Pad", (0.0, -0.94, 0.13), (0.095, 0.02, 0.26), p.rubber, bevel=0.008)
+    box("Stock Lock Lever", (0.0, -0.66, 0.015), (0.03, 0.08, 0.02), p.dark, bevel=0.004)
+
+    # Holographic sight and a folding rear sight.
+    box("Holo Sight Base", (0.0, 0.02, 0.32), (0.075, 0.15, 0.03), p.dark, bevel=0.005)
+    profile("Holo Sight Hood", [(-0.05, 0.335), (0.09, 0.335), (0.09, 0.43), (-0.05, 0.43)], 0.075, p.dark, bevel=0.01, segments=2)
+    box("Holo Sight Window", (0.0, 0.02, 0.385), (0.06, 0.13, 0.07), p.glass, bevel=0.0)
+    box("Holo Sight Reticle", (0.0, 0.03, 0.385), (0.006, 0.002, 0.006), p.accent, bevel=0.0)
+    box("Rear Flip Sight", (0.0, -0.27, 0.32), (0.06, 0.03, 0.03), p.metal, bevel=0.004)
+    box("Front Flip Sight", (0.0, 0.76, 0.32), (0.05, 0.03, 0.035), p.metal, bevel=0.004)
+
+    # Angled foregrip.
+    profile("Angled Foregrip", [(0.42, 0.08), (0.6, 0.08), (0.56, 0.0), (0.46, -0.03)], 0.06, p.frame, bevel=0.01, segments=3)
+    export_model("AssaultRifle")
+
+
+def grenade_launcher():
+    clear_scene()
+    p = Palette("GrenadeLauncher", (0.95, 0.75, 0.1), frame=(0.2, 0.22, 0.16))
+    drum_z = 0.08
+    bore_z = drum_z + 0.095
+
+    # Revolving six-round drum with chamber mouths on the front face.
+    tube("Drum Body", -0.1, 0.2, 0.15, p.frame, z=drum_z, vertices=36)
+    tube("Drum Rear Plate", -0.13, -0.1, 0.155, p.metal, z=drum_z, vertices=36)
+    tube("Drum Front Plate", 0.2, 0.225, 0.155, p.metal, z=drum_z, vertices=36)
+    for i in range(6):
+        a = i * math.pi / 3.0
+        x = math.sin(a) * 0.095
+        z = drum_z + math.cos(a) * 0.095
+        tube(f"Chamber Mouth {i + 1}", 0.224, 0.229, 0.038, p.dark, z=z, x=x, bevel=0.0, vertices=20)
+        tube(f"Drum Flute {i + 1}", -0.08, 0.18, 0.02, p.dark, z=drum_z + math.cos(a + math.pi / 6) * 0.148,
+             x=math.sin(a + math.pi / 6) * 0.148, vertices=12)
+    tube("Drum Axle", 0.22, 0.3, 0.025, p.metal, z=drum_z)
+
+    # Wide barrel with grip bands and a flared muzzle.
+    tube("Barrel", 0.225, 0.82, 0.06, p.metal, z=bore_z, vertices=32)
+    tube("Barrel Muzzle", 0.8, 0.86, 0.066, p.dark, z=bore_z, vertices=32)
+    tube("Barrel Bore", 0.859, 0.863, 0.044, p.dark, z=bore_z, bevel=0.0, vertices=32)
+    for i, y in enumerate((0.36, 0.48, 0.6)):
+        tube(f"Barrel Band {i + 1}", y - 0.012, y + 0.012, 0.064, p.accent if i == 1 else p.dark, z=bore_z, vertices=32)
+
+    # Top strap from the frame over the drum to the barrel, with a rail and leaf sight.
+    box("Top Strap", (0.0, 0.08, bore_z + 0.085), (0.06, 0.62, 0.035), p.metal, bevel=0.006)
+    picatinny("Top Rail", -0.12, 0.3, bore_z + 0.115, 0.06, p.metal)
+    box("Leaf Sight Base", (0.0, 0.4, bore_z + 0.08), (0.05, 0.06, 0.03), p.metal, bevel=0.004)
+    box("Leaf Sight Plate", (0.0, 0.4, bore_z + 0.13), (0.06, 0.008, 0.08), p.dark, rotation=(-15, 0, 0), bevel=0.002)
+
+    # Rear frame, pistol grip, and trigger group.
+    profile("Rear Frame", [(-0.36, 0.06), (-0.12, 0.06), (-0.12, 0.29), (-0.33, 0.29), (-0.36, 0.25)], 0.11, p.metal, bevel=0.01, segments=3)
+    profile("Pistol Grip", [
+        (-0.2, 0.06), (-0.215, -0.01), (-0.23, -0.06), (-0.235, -0.1), (-0.25, -0.15),
+        (-0.27, -0.26), (-0.38, -0.26), (-0.36, -0.08), (-0.33, 0.06),
+    ], 0.1, p.frame, bevel=0.012, segments=3)
+    stroke("Trigger Guard", [(-0.08, 0.06), (-0.07, -0.01), (-0.1, -0.04), (-0.2, -0.04)], 0.022, 0.06, p.metal)
+    stroke("Trigger", [(-0.135, 0.06), (-0.13, 0.025), (-0.14, -0.002)], 0.016, 0.026, p.metal)
+
+    # Folding stock on a tube.
+    tube("Stock Tube", -0.7, -0.36, 0.028, p.metal, z=0.19, vertices=18)
+    profile("Stock", [(-0.56, 0.24), (-0.56, 0.12), (-0.66, 0.0), (-0.84, -0.02), (-0.86, 0.01), (-0.86, 0.26), (-0.6, 0.27)],
+            0.085, p.frame, bevel=0.012, segments=3)
+    box("Butt Pad", (0.0, -0.87, 0.12), (0.09, 0.02, 0.27), p.rubber, bevel=0.008)
+
+    # Forward grip under the barrel.
+    profile("Foregrip", [(0.42, bore_z - 0.06), (0.5, bore_z - 0.06), (0.49, -0.16), (0.48, -0.18), (0.43, -0.18), (0.415, -0.16)],
+            0.065, p.frame, bevel=0.014, segments=3)
+    export_model("GrenadeLauncher")
+
+
+def rocket_launcher():
+    clear_scene()
+    p = Palette("RocketLauncher", (0.85, 0.16, 0.12), frame=(0.22, 0.25, 0.17))
+    tube_z_axis = 0.16
+
+    # Launch tube with heat-shield wraps, a flared rear venturi, and a front collar.
+    tube("Launch Tube", -0.7, 0.62, 0.075, p.frame, z=tube_z_axis, vertices=36)
+    tube("Rear Venturi", -0.9, -0.7, 0.11, p.dark, z=tube_z_axis, radius_end=0.075, vertices=36)
+    tube("Rear Venturi Lip", -0.92, -0.9, 0.112, p.metal, z=tube_z_axis, vertices=36)
+    tube("Front Collar", 0.6, 0.66, 0.082, p.metal, z=tube_z_axis, vertices=36)
+    for i, y in enumerate((-0.1, 0.05, 0.2)):
+        tube(f"Heat Shield Wrap {i + 1}", y - 0.06, y + 0.06, 0.08, p.texture, z=tube_z_axis, vertices=36)
+
+    # Loaded rocket warhead sticking out of the front.
+    tube("Warhead Neck", 0.66, 0.74, 0.045, p.metal, z=tube_z_axis, vertices=24)
+    tube("Warhead Body", 0.74, 0.92, 0.085, p.frame, z=tube_z_axis, vertices=32)
+    tube("Warhead Band", 0.86, 0.88, 0.087, p.accent, z=tube_z_axis, vertices=32)
+    tube("Warhead Cone", 0.92, 1.1, 0.085, p.frame, z=tube_z_axis, radius_end=0.02, vertices=32)
+    tube("Warhead Fuze Tip", 1.1, 1.14, 0.02, p.metal, z=tube_z_axis, radius_end=0.008, vertices=16)
+
+    # Pistol grip with trigger, and a forward grip.
+    box("Grip Mount", (0.0, 0.08, tube_z_axis - 0.085), (0.06, 0.24, 0.03), p.metal, bevel=0.005)
+    profile("Pistol Grip", [
+        (0.04, 0.06), (0.03, 0.0), (0.015, -0.05), (0.01, -0.09), (-0.005, -0.14),
+        (-0.025, -0.24), (-0.13, -0.24), (-0.11, -0.06), (-0.09, 0.06),
+    ], 0.095, p.frame, bevel=0.012, segments=3)
+    stroke("Trigger Guard", [(0.15, 0.06), (0.16, 0.0), (0.13, -0.03), (0.04, -0.03)], 0.02, 0.06, p.metal)
+    stroke("Trigger", [(0.1, 0.06), (0.105, 0.025), (0.095, -0.002)], 0.016, 0.026, p.metal)
+    profile("Forward Grip", [(0.34, 0.07), (0.42, 0.07), (0.41, -0.13), (0.4, -0.15), (0.35, -0.15), (0.335, -0.13)],
+            0.065, p.frame, bevel=0.014, segments=3)
+    box("Forward Grip Mount", (0.0, 0.38, tube_z_axis - 0.085), (0.06, 0.12, 0.03), p.metal, bevel=0.005)
+
+    # Shoulder rest under the rear of the tube.
+    profile("Shoulder Rest", [(-0.55, 0.08), (-0.3, 0.08), (-0.34, 0.02), (-0.5, 0.0), (-0.56, 0.03)], 0.1, p.rubber, bevel=0.012, segments=3)
+
+    # Optical sight on the left, on a bracket.
+    box("Sight Bracket", (-0.09, 0.14, tube_z_axis + 0.06), (0.03, 0.1, 0.06), p.metal, bevel=0.005)
+    tube("Sight Body", 0.02, 0.28, 0.03, p.dark, z=tube_z_axis + 0.1, x=-0.12, vertices=20)
+    tube("Sight Eyecup", -0.04, 0.02, 0.036, p.rubber, z=tube_z_axis + 0.1, x=-0.12, vertices=20)
+    tube("Sight Lens", 0.279, 0.283, 0.026, p.glass, z=tube_z_axis + 0.1, x=-0.12, bevel=0.0, vertices=20)
+
+    # Iron sights on top and a carry sling loop.
+    box("Front Iron Sight", (0.0, 0.5, tube_z_axis + 0.1), (0.03, 0.02, 0.05), p.metal, bevel=0.003)
+    box("Rear Iron Sight", (0.0, -0.2, tube_z_axis + 0.1), (0.05, 0.02, 0.045), p.metal, bevel=0.003)
+    tube_x("Sling Loop", -0.03, 0.03, 0.01, p.metal, y=-0.45, z=tube_z_axis + 0.085)
+    export_model("RocketLauncher")
+
+
+BUILDERS = {
+    "TranquilizerPistol": tranquilizer_pistol,
+    "ShockPistol": shock_pistol,
+    "SedativeSMG": sedative_smg,
+    "PrecisionRifle": precision_rifle,
+    "AssaultRifle": assault_rifle,
+    "GrenadeLauncher": grenade_launcher,
+    "RocketLauncher": rocket_launcher,
+}
+
+for model_name, builder in BUILDERS.items():
+    if ONLY is None or model_name in ONLY:
+        builder()
 
 print(f"Generated weapon models in {os.path.join(OUTPUT_DIR, 'Weapons')}")
