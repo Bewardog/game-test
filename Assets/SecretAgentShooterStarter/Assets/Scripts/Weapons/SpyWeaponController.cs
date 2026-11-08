@@ -379,9 +379,10 @@ public class SpyWeaponController : MonoBehaviour
         Vector3 shotStart = muzzle != null ? muzzle.position : origin + direction * 0.4f;
         Vector3 shotEnd = origin + direction * range;
         bool hitSomething = TryGetShotHit(origin, direction, range, out RaycastHit hit);
+        bool firesDarts = FiresDarts(currentWeapon);
         EnemyOperative enemy = null;
         MissionSecurityCamera securityCamera = null;
-        bool securityTargetDisabled = false;
+        Transform stickTo = null;
 
         if (hitSomething)
         {
@@ -390,51 +391,45 @@ public class SpyWeaponController : MonoBehaviour
             if (enemy != null)
             {
                 MissionShotsHit++;
-                if (sedation > 0f)
-                {
-                    enemy.ApplySedation(sedation);
-                }
+                stickTo = enemy.transform;
+            }
+            else
+            {
+                securityCamera = hit.collider.GetComponentInParent<MissionSecurityCamera>();
+            }
+        }
 
-                if (lethal > 0f)
-                {
-                    enemy.TakeDamage(lethal);
-                }
-
+        // Effects land when the round arrives (instantly for bullets, after the
+        // short flight for darts). There is no hit/miss readout; the sedation
+        // gauge and camera messages still show because they carry information.
+        Vector3 impactPoint = shotEnd;
+        System.Action applyHit = () =>
+        {
+            if (enemy != null)
+            {
+                if (sedation > 0f) enemy.ApplySedation(sedation);
+                if (lethal > 0f) enemy.TakeDamage(lethal);
                 string message = enemy.isKnockedOut
                     ? "TARGET SEDATED"
                     : $"SEDATION {Mathf.CeilToInt(enemy.sedation)}/{Mathf.CeilToInt(enemy.SedationThreshold)}";
                 SetFeedback(message, true, 0.8f);
             }
-            else if ((securityCamera = hit.collider.GetComponentInParent<MissionSecurityCamera>()) != null)
+            else if (securityCamera != null && securityCamera.ReceiveWeaponHit(impactPoint))
             {
-                securityTargetDisabled = securityCamera.ReceiveWeaponHit(hit.point);
-                if (securityTargetDisabled)
-                {
-                    MissionShotsHit++;
-                    SetFeedback("CAMERA DISABLED", true, 0.8f);
-                }
-                else
-                {
-                    SetFeedback("IMPACT", false, 0.5f);
-                }
+                MissionShotsHit++;
+                SetFeedback("CAMERA DISABLED", true, 0.8f);
             }
-            else
-            {
-                SetFeedback("IMPACT", false, 0.5f);
-            }
+        };
+
+        SpawnMuzzleFlash();
+        if (firesDarts)
+        {
+            ShotProjectileVisual.Fire(shotStart, shotEnd, true, hitSomething, stickTo, applyHit);
         }
         else
         {
-            SetFeedback("MISS", false, 0.5f);
-        }
-
-        SpawnMuzzleFlash();
-        bool hitPriorityTarget = enemy != null || securityTargetDisabled;
-        SpawnTracer(shotStart, shotEnd, hitPriorityTarget ? enemyHitColor : tracerColor);
-
-        if (hitSomething)
-        {
-            SpawnImpact(shotEnd, hitPriorityTarget ? enemyHitColor : tracerColor);
+            applyHit();
+            ShotProjectileVisual.Fire(shotStart, shotEnd, false, hitSomething, null);
         }
 
         return true;
@@ -582,6 +577,14 @@ public class SpyWeaponController : MonoBehaviour
         return foundHit;
     }
 
+    // Tranquilizer weapons fire visible darts; everything else fires bullets.
+    private static bool FiresDarts(WeaponDefinition weapon)
+    {
+        if (weapon == null) return true;
+        string id = weapon.weaponId ?? string.Empty;
+        return id.Contains("tranq") || id.Contains("dart");
+    }
+
     private void SetFeedback(string message, bool hitEnemy, float duration)
     {
         FeedbackMessage = message;
@@ -593,7 +596,8 @@ public class SpyWeaponController : MonoBehaviour
     {
         if (muzzle == null) return;
 
-        GameObject flash = CreateEffectSphere("Muzzle Flash", muzzle.position + muzzle.forward * 0.25f, tracerColor, 0.16f);
+        Color flashColor = FiresDarts(currentWeapon) ? new Color(0.75f, 0.95f, 1f) : new Color(1f, 0.78f, 0.35f);
+        GameObject flash = CreateEffectSphere("Muzzle Flash", muzzle.position + muzzle.forward * 0.25f, flashColor, FiresDarts(currentWeapon) ? 0.09f : 0.16f);
         Destroy(flash, 0.1f);
     }
 
