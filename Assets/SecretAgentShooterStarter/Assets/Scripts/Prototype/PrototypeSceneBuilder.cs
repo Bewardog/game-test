@@ -5289,9 +5289,11 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float terminalYaw = sideDirection < 0f ? 90f : -90f;
         if (spec.exteriorDoor)
         {
-            terminalX = spec.ExteriorDoorX - sideDirection * (doorWidth * 0.5f + 2f);
-            terminalZ = spec.SouthWallZ + 1.15f;
-            terminalYaw = 180f;
+            // Outside on the driveway, beside the door, so the room can be
+            // built or upgraded before going in.
+            terminalX = spec.ExteriorDoorX - sideDirection * (doorWidth * 0.5f + 2.2f);
+            terminalZ = LairDepthMinZ - 1.6f;
+            terminalYaw = 0f;
         }
         GameObject terminal = CreateEnvironmentModel(
             "LabConsole_A",
