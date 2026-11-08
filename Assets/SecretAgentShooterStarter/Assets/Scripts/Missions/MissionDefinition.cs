@@ -239,7 +239,7 @@ public class MissionDefinition : ScriptableObject
             "Return to the embassy under alert conditions, steal the security registry, and recruit an inside operative.",
             MissionEnvironmentType.Embassy, 2000, MissionObjectiveType.StealIntel, MissionObjectiveType.RecruitTarget);
         AddExtendedMission(missions, "dead-channel", 11, "Operation Dead Channel",
-            "Penetrate the communications vault, copy its routing table, and recover the experimental shock sidearm.",
+            "Penetrate the communications vault, copy its routing table, and recover the prototype tranquilizer crossbow.",
             MissionEnvironmentType.DataCenter, 2200, MissionObjectiveType.StealIntel, MissionObjectiveType.ExtractWeaponPrototype);
         AddExtendedMission(missions, "snowblind", 12, "Operation Snowblind",
             "Cross the frozen relay perimeter, capture its commander alive, and extract her through the insertion route.",

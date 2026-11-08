@@ -78,8 +78,7 @@ public class SpyWeaponController : MonoBehaviour
         {
             switch (CurrentRound)
             {
-                case WeaponRound.Dart: return "DARTS";
-                case WeaponRound.ShockBolt: return "SHOCK";
+                case WeaponRound.Dart: return currentWeapon != null && currentWeapon.firesBolts && !bulletMode ? "BOLTS" : "DARTS";
                 case WeaponRound.Grenade: return "GRENADES";
                 case WeaponRound.Rocket: return "ROCKETS";
                 default: return "BULLETS";
@@ -408,7 +407,7 @@ public class SpyWeaponController : MonoBehaviour
         float range = currentWeapon != null ? currentWeapon.range : 80f;
         float sedation = 0f;
         float lethal = 0f;
-        if (round == WeaponRound.Dart || round == WeaponRound.ShockBolt)
+        if (round == WeaponRound.Dart)
         {
             sedation = currentWeapon != null ? currentWeapon.sedationDamage : 35f;
         }
@@ -526,12 +525,8 @@ public class SpyWeaponController : MonoBehaviour
         SpawnMuzzleFlash();
         if (firesDarts)
         {
-            ShotProjectileVisual.Fire(shotStart, shotEnd, true, hitSomething, stickTo, applyHit);
-        }
-        else if (round == WeaponRound.ShockBolt)
-        {
-            applyHit();
-            ShotProjectileVisual.FireShockBolt(shotStart, shotEnd, hitSomething);
+            bool bolt = currentWeapon != null && currentWeapon.firesBolts;
+            ShotProjectileVisual.Fire(shotStart, shotEnd, true, hitSomething, stickTo, applyHit, bolt);
         }
         else
         {
@@ -606,7 +601,8 @@ public class SpyWeaponController : MonoBehaviour
                 hearingRange = 30f;
                 break;
             case WeaponClass.Gadget:
-                hearingRange = 4f;
+                // The crossbow is nearly silent: only the string's snap, right next to you.
+                hearingRange = currentWeapon != null && currentWeapon.firesBolts ? 2f : 4f;
                 break;
             default:
                 hearingRange = 7f;
@@ -752,6 +748,7 @@ public class SpyWeaponController : MonoBehaviour
     private void SpawnMuzzleFlash()
     {
         if (muzzle == null) return;
+        if (currentWeapon != null && currentWeapon.firesBolts) return; // crossbows have no flash
 
         Color flashColor;
         float flashSize;
@@ -760,10 +757,6 @@ public class SpyWeaponController : MonoBehaviour
             case WeaponRound.Dart:
                 flashColor = new Color(0.75f, 0.95f, 1f);
                 flashSize = 0.09f;
-                break;
-            case WeaponRound.ShockBolt:
-                flashColor = new Color(0.45f, 0.75f, 1f);
-                flashSize = 0.13f;
                 break;
             case WeaponRound.Grenade:
             case WeaponRound.Rocket:

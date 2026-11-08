@@ -27,7 +27,7 @@ public class MissionObjectiveInteractable : MonoBehaviour, IInteractable
         if (objectiveType == PickupType.PrototypeWeapon)
         {
             MissionManager.Instance?.NotifyPrototypeRecovered();
-            WeaponDefinition prototype = GameFlowManager.Instance?.GetWeapon("shock-pistol");
+            WeaponDefinition prototype = GameFlowManager.Instance?.GetWeapon("tranq-crossbow");
             if (prototype != null)
             {
                 SecretLairManager.Instance?.UnlockWeapon(prototype);

@@ -11,17 +11,20 @@ public class ShotProjectileVisual : MonoBehaviour
     private const float DartSpeed = 55f;
     private const float BulletSpeed = 260f;
     private const float StuckDartLifetime = 6f;
+    private const float BoltSpeed = 70f;
+    private const float StuckBoltLifetime = 12f;
 
     private Vector3 target;
     private float speed;
     private bool isDart;
+    private bool isBolt;
     private bool hitSurface;
     private Transform stickTo;
     private System.Action onArrive;
 
     private static Shader trailShader;
 
-    public static void Fire(Vector3 start, Vector3 end, bool dart, bool hitSurface, Transform stickTo, System.Action onArrive = null)
+    public static void Fire(Vector3 start, Vector3 end, bool dart, bool hitSurface, Transform stickTo, System.Action onArrive = null, bool crossbowBolt = false)
     {
         Vector3 direction = end - start;
         if (direction.sqrMagnitude < 0.0001f)
@@ -30,11 +33,15 @@ public class ShotProjectileVisual : MonoBehaviour
             return;
         }
 
-        GameObject root = new GameObject(dart ? "Tranquilizer Dart Round" : "Bullet Round");
+        GameObject root = new GameObject(crossbowBolt ? "Crossbow Bolt Round" : dart ? "Tranquilizer Dart Round" : "Bullet Round");
         root.transform.position = start;
         root.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 
-        if (dart)
+        if (crossbowBolt)
+        {
+            BuildBolt(root.transform);
+        }
+        else if (dart)
         {
             BuildDart(root.transform);
             root.transform.localScale = Vector3.one * 1.4f;
@@ -43,80 +50,12 @@ public class ShotProjectileVisual : MonoBehaviour
 
         ShotProjectileVisual visual = root.AddComponent<ShotProjectileVisual>();
         visual.target = end;
-        visual.speed = dart ? DartSpeed : BulletSpeed;
-        visual.isDart = dart;
+        visual.speed = crossbowBolt ? BoltSpeed : dart ? DartSpeed : BulletSpeed;
+        visual.isDart = dart || crossbowBolt;
+        visual.isBolt = crossbowBolt;
         visual.hitSurface = hitSurface;
         visual.stickTo = stickTo;
         visual.onArrive = onArrive;
-    }
-
-    /// <summary>
-    /// The shock pistol's electric bolt: a jagged blue arc from the muzzle to
-    /// the hit point that flickers for a moment, with a spark where it lands.
-    /// </summary>
-    public static void FireShockBolt(Vector3 start, Vector3 end, bool hitSurface)
-    {
-        GameObject bolt = new GameObject("Shock Bolt");
-        LineRenderer line = bolt.AddComponent<LineRenderer>();
-        Vector3 span = end - start;
-        float length = span.magnitude;
-        int segments = Mathf.Clamp(Mathf.CeilToInt(length / 0.8f), 4, 40);
-        Vector3 side = Vector3.Cross(span.normalized, Vector3.up);
-        if (side.sqrMagnitude < 0.01f) side = Vector3.right;
-        side.Normalize();
-        Vector3 up = Vector3.Cross(side, span.normalized);
-
-        line.useWorldSpace = true;
-        line.positionCount = segments + 1;
-        for (int i = 0; i <= segments; i++)
-        {
-            float t = i / (float)segments;
-            float jitter = (i == 0 || i == segments) ? 0f : 0.12f;
-            Vector3 offset = side * Random.Range(-jitter, jitter) + up * Random.Range(-jitter, jitter);
-            line.SetPosition(i, Vector3.Lerp(start, end, t) + offset);
-        }
-
-        line.startWidth = 0.05f;
-        line.endWidth = 0.025f;
-        line.numCapVertices = 2;
-        line.startColor = new Color(0.75f, 0.9f, 1f, 1f);
-        line.endColor = new Color(0.3f, 0.6f, 1f, 0.8f);
-        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        if (trailShader == null)
-        {
-            trailShader = Shader.Find("Sprites/Default");
-            if (trailShader == null) trailShader = Shader.Find("Universal Render Pipeline/Unlit");
-        }
-
-        if (trailShader != null) line.material = new Material(trailShader);
-        Destroy(bolt, 0.09f);
-
-        if (!hitSurface) return;
-        GameObject spark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        spark.name = "Shock Bolt Spark";
-        Collider sparkCollider = spark.GetComponent<Collider>();
-        if (sparkCollider != null)
-        {
-            sparkCollider.enabled = false;
-            Destroy(sparkCollider);
-        }
-
-        spark.transform.position = end;
-        spark.transform.localScale = Vector3.one * 0.16f;
-        Renderer sparkRenderer = spark.GetComponent<Renderer>();
-        if (sparkRenderer != null)
-        {
-            sparkRenderer.material.color = new Color(0.55f, 0.8f, 1f);
-            sparkRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-
-        Light glow = spark.AddComponent<Light>();
-        glow.type = LightType.Point;
-        glow.color = new Color(0.45f, 0.7f, 1f);
-        glow.range = 3f;
-        glow.intensity = 2.5f;
-        glow.shadows = LightShadows.None;
-        Destroy(spark, 0.15f);
     }
 
     private void Update()
@@ -138,7 +77,7 @@ public class ShotProjectileVisual : MonoBehaviour
             // Bury the needle slightly and leave the dart where it landed.
             transform.position = target - transform.forward * 0.02f;
             if (stickTo != null) transform.SetParent(stickTo, true);
-            Destroy(gameObject, StuckDartLifetime);
+            Destroy(gameObject, isBolt ? StuckBoltLifetime : StuckDartLifetime);
         }
         else
         {
@@ -160,6 +99,23 @@ public class ShotProjectileVisual : MonoBehaviour
         CreatePart(root, PrimitiveType.Cylinder, "Dart Needle", new Vector3(0f, 0f, 0.035f), new Vector3(0.004f, 0.03f, 0.004f), Quaternion.Euler(90f, 0f, 0f), needle);
         CreatePart(root, PrimitiveType.Cube, "Dart Fletching A", new Vector3(0f, 0f, -0.1f), new Vector3(0.045f, 0.003f, 0.035f), Quaternion.identity, fletching);
         CreatePart(root, PrimitiveType.Cube, "Dart Fletching B", new Vector3(0f, 0f, -0.1f), new Vector3(0.003f, 0.045f, 0.035f), Quaternion.identity, fletching);
+    }
+
+    // Crossbow bolt: long carbon shaft, glass dose head with a needle, and
+    // three orange vanes.
+    private static void BuildBolt(Transform root)
+    {
+        Color shaft = new Color(0.12f, 0.12f, 0.13f);
+        Color vial = new Color(0.6f, 0.85f, 0.9f);
+        Color dose = new Color(1f, 0.45f, 0.08f);
+        CreatePart(root, PrimitiveType.Cylinder, "Bolt Shaft", new Vector3(0f, 0f, -0.2f), new Vector3(0.012f, 0.22f, 0.012f), Quaternion.Euler(90f, 0f, 0f), shaft);
+        CreatePart(root, PrimitiveType.Cylinder, "Bolt Dose Vial", new Vector3(0f, 0f, 0.04f), new Vector3(0.026f, 0.035f, 0.026f), Quaternion.Euler(90f, 0f, 0f), vial);
+        CreatePart(root, PrimitiveType.Cylinder, "Bolt Dose", new Vector3(0f, 0f, 0.035f), new Vector3(0.018f, 0.025f, 0.018f), Quaternion.Euler(90f, 0f, 0f), dose);
+        CreatePart(root, PrimitiveType.Cylinder, "Bolt Needle", new Vector3(0f, 0f, 0.095f), new Vector3(0.005f, 0.025f, 0.005f), Quaternion.Euler(90f, 0f, 0f), new Color(0.9f, 0.9f, 0.92f));
+        for (int i = 0; i < 3; i++)
+        {
+            CreatePart(root, PrimitiveType.Cube, $"Bolt Vane {i + 1}", Quaternion.Euler(0f, 0f, i * 120f) * new Vector3(0f, 0.014f, -0.37f), new Vector3(0.003f, 0.025f, 0.07f), Quaternion.Euler(0f, 0f, i * 120f), dose);
+        }
     }
 
     private static void BuildBullet(Transform root)

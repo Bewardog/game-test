@@ -24,6 +24,16 @@ public static class CampaignPersistence
         lair.unlockedWeaponIds = new List<string>(data.unlockedWeaponIds ?? new List<string>());
         if (!lair.unlockedWeaponIds.Contains("tranq-pistol")) lair.unlockedWeaponIds.Add("tranq-pistol");
         lair.equippedWeaponId = string.IsNullOrEmpty(data.equippedWeaponId) ? "tranq-pistol" : data.equippedWeaponId;
+
+        // The shock pistol was replaced by the tranquilizer crossbow.
+        int shockIndex = lair.unlockedWeaponIds.IndexOf("shock-pistol");
+        if (shockIndex >= 0)
+        {
+            lair.unlockedWeaponIds.RemoveAt(shockIndex);
+            if (!lair.unlockedWeaponIds.Contains("tranq-crossbow")) lair.unlockedWeaponIds.Add("tranq-crossbow");
+        }
+
+        if (lair.equippedWeaponId == "shock-pistol") lair.equippedWeaponId = "tranq-crossbow";
         lair.tranquilizerResearchLevel = Mathf.Max(0, data.tranquilizerResearchLevel);
         lair.armorResearchLevel = Mathf.Max(0, data.armorResearchLevel);
         lair.weaponsResearchLevel = Mathf.Max(0, data.weaponsResearchLevel);

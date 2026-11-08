@@ -270,7 +270,7 @@ def export_model(name):
 # ---------------------------------------------------------------- shared parts
 
 def pistol_frame(p, slide_front=0.5, grip_colour=None):
-    """Slide, frame, raked grip, trigger group, and sights shared by both pistols."""
+    """Slide, frame, raked grip, trigger group, and sights for the pistol."""
     # Slide with a chamfered nose and a slightly sloped rear.
     profile("Slide", [
         (-0.30, 0.10), (slide_front, 0.10), (slide_front, 0.215),
@@ -354,30 +354,6 @@ def tranquilizer_pistol():
     for side in (-1, 1):
         box(f"Slide Stripe {side}", (side * 0.0625, 0.18, 0.25), (0.003, 0.36, 0.01), p.accent, bevel=0.0)
     export_model("TranquilizerPistol")
-
-
-def shock_pistol():
-    clear_scene()
-    p = Palette("ShockPistol", (0.72, 0.28, 0.92))
-    pistol_frame(p, slide_front=0.46)
-
-    # Emitter barrel with coil rings and a squared electrode head.
-    tube("Emitter Barrel", 0.4, 0.56, 0.03, p.metal, z=0.205)
-    for i, y in enumerate((0.47, 0.5, 0.53)):
-        tube(f"Emitter Coil Ring {i + 1}", y - 0.008, y + 0.008, 0.038, p.accent, z=0.205)
-    box("Electrode Head", (0.0, 0.58, 0.205), (0.1, 0.05, 0.085), p.frame, bevel=0.01, segments=3)
-    for side in (-1, 1):
-        tube(f"Electrode Prong {side}", 0.6, 0.625, 0.009, p.metal, z=0.205, x=side * 0.028, vertices=12)
-        box(f"Electrode Glow {side}", (side * 0.028, 0.606, 0.205), (0.014, 0.004, 0.014), p.accent, bevel=0.0)
-
-    # Battery pack in place of the magazine base, with charge lights.
-    profile("Battery Pack", [(-0.048, -0.29), (-0.053, -0.35), (-0.21, -0.35), (-0.205, -0.29)],
-            0.11, p.frame, bevel=0.008)
-    for i in range(3):
-        box(f"Battery Charge Light {i + 1}", (0.056, -0.085 - i * 0.04, -0.32), (0.004, 0.025, 0.014), p.accent, bevel=0.0)
-    for side in (-1, 1):
-        box(f"Slide Energy Stripe {side}", (side * 0.0625, 0.15, 0.13), (0.003, 0.4, 0.012), p.accent, bevel=0.0)
-    export_model("ShockPistol")
 
 
 def sedative_smg():
@@ -700,14 +676,97 @@ def rocket_launcher():
     export_model("RocketLauncher")
 
 
+def flat_bar(name, a, b, thickness, depth, mat, z):
+    """A bar lying in the top (X-Y) view from point a to point b at height z."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = math.hypot(dx, dy)
+    angle = math.degrees(math.atan2(dy, dx))
+    return box(name, ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, z), (length, thickness, depth), mat,
+               rotation=(0.0, 0.0, angle), bevel=min(thickness, depth) * 0.3)
+
+
+def crossbow():
+    clear_scene()
+    p = Palette("Crossbow", (1.0, 0.45, 0.08), frame=(0.1, 0.11, 0.1))
+    rail_z = 0.2
+
+    # Stock with a thumbhole-style grip, cheek rest, and butt pad.
+    profile("Stock", [
+        (0.05, 0.17), (0.05, 0.12), (-0.12, 0.12), (-0.16, 0.06), (-0.18, -0.02), (-0.2, -0.2),
+        (-0.31, -0.2), (-0.3, -0.04), (-0.34, 0.08), (-0.78, 0.0), (-0.8, 0.04), (-0.8, 0.27),
+        (-0.76, 0.29), (-0.42, 0.25), (-0.3, 0.2),
+    ], 0.09, p.frame, bevel=0.012, segments=3)
+    for side in (-1, 1):
+        profile(f"Grip Texture Panel {side}", [(-0.17, 0.04), (-0.19, -0.17), (-0.29, -0.17), (-0.28, 0.04)],
+                0.006, p.texture, x=side * 0.046, bevel=0.002, segments=1)
+    box("Cheek Rest", (0.0, -0.58, 0.27), (0.07, 0.24, 0.05), p.accent, bevel=0.008)
+    box("Butt Pad", (0.0, -0.81, 0.13), (0.09, 0.02, 0.28), p.rubber, bevel=0.008)
+
+    # Flight rail running forward to the riser, with a bolt groove.
+    box("Flight Rail", (0.0, 0.38, rail_z), (0.06, 0.7, 0.05), p.metal, bevel=0.006)
+    box("Bolt Groove", (0.0, 0.38, rail_z + 0.026), (0.012, 0.66, 0.004), p.dark, bevel=0.0)
+    box("Rail Underside", (0.0, 0.33, rail_z - 0.05), (0.05, 0.5, 0.05), p.frame, bevel=0.008)
+    for side in (-1, 1):
+        ribs(f"Rail Lightening Cut {side}", 0.15, 0.6, 5, side * 0.031, rail_z, (0.004, 0.05, 0.022), p.dark)
+
+    # Riser and swept-back limbs with cams at the tips.
+    box("Riser", (0.0, 0.74, rail_z), (0.14, 0.06, 0.08), p.metal, bevel=0.01, segments=2)
+    box("Foot Stirrup Bar", (0.0, 0.83, rail_z - 0.02), (0.12, 0.02, 0.02), p.metal, bevel=0.004)
+    for side in (-1, 1):
+        flat_bar(f"Foot Stirrup Arm {side}", (side * 0.06, 0.76), (side * 0.06, 0.84), 0.015, 0.015, p.metal, rail_z - 0.02)
+    tips = []
+    for side in (-1, 1):
+        root = (side * 0.06, 0.74)
+        tip = (side * 0.43, 0.63)
+        tips.append(tip)
+        for layer, dz in (("Upper", 0.022), ("Lower", -0.022)):
+            flat_bar(f"Limb {layer} {side}", root, tip, 0.04, 0.012, p.frame, rail_z + dz)
+        tube_z(f"Cam {side}", rail_z - 0.03, rail_z + 0.03, 0.03, p.metal, x=tip[0], y=tip[1])
+        tube_z(f"Cam Axle {side}", rail_z - 0.04, rail_z + 0.04, 0.008, p.accent, x=tip[0], y=tip[1])
+
+    # Cocked string from each cam back to the latch.
+    latch = (0.0, 0.12)
+    for side, tip in zip((-1, 1), tips):
+        flat_bar(f"String {side}", (tip[0] - side * 0.02, tip[1] - 0.02), latch, 0.006, 0.006, p.dark, rail_z + 0.03)
+    box("String Latch", (0.0, 0.1, rail_z + 0.035), (0.05, 0.05, 0.03), p.metal, bevel=0.006)
+
+    # Loaded tranquilizer bolt: shaft, glass dose head, and orange fletching.
+    tube("Bolt Shaft", 0.12, 0.8, 0.006, p.metal, z=rail_z + 0.035, vertices=10)
+    tube("Bolt Dose Vial", 0.78, 0.86, 0.013, p.glass, z=rail_z + 0.035, vertices=14)
+    tube("Bolt Dose", 0.785, 0.84, 0.009, p.accent, z=rail_z + 0.035, vertices=12)
+    tube("Bolt Needle", 0.86, 0.9, 0.009, p.metal, z=rail_z + 0.035, radius_end=0.001, vertices=10)
+    for i in range(3):
+        a = i * 2.0 * math.pi / 3.0
+        box(f"Bolt Fletching {i + 1}", (math.sin(a) * 0.012, 0.17, rail_z + 0.035 + math.cos(a) * 0.012),
+            (0.003, 0.07, 0.016), p.accent, rotation=(0.0, -math.degrees(a), 0.0), bevel=0.0)
+
+    # Trigger group and a forward grip.
+    stroke("Trigger Guard", [(-0.03, 0.12), (-0.02, 0.06), (-0.05, 0.035), (-0.15, 0.035)], 0.018, 0.055, p.metal)
+    stroke("Trigger", [(-0.085, 0.12), (-0.08, 0.085), (-0.09, 0.06)], 0.014, 0.024, p.metal)
+    box("Safety Slider", (0.033, 0.06, rail_z), (0.012, 0.04, 0.02), p.accent, bevel=0.004)
+    profile("Forward Grip", [(0.3, rail_z - 0.07), (0.38, rail_z - 0.07), (0.37, -0.05), (0.36, -0.07), (0.31, -0.07), (0.295, -0.05)],
+            0.06, p.frame, bevel=0.014, segments=3)
+
+    # Scope.
+    scope_z = rail_z + 0.13
+    for i, y in enumerate((0.07, 0.29)):
+        box(f"Scope Mount {i + 1}", (0.0, y, rail_z + 0.065), (0.04, 0.03, 0.09), p.metal, bevel=0.004)
+        tube(f"Scope Ring {i + 1}", y - 0.015, y + 0.015, 0.032, p.metal, z=scope_z)
+    tube("Scope Eyepiece", -0.05, 0.03, 0.036, p.dark, z=scope_z)
+    tube("Scope Tube", 0.03, 0.33, 0.026, p.dark, z=scope_z)
+    tube("Scope Objective", 0.33, 0.41, 0.026, p.dark, z=scope_z, radius_end=0.04)
+    tube("Scope Lens", 0.409, 0.413, 0.034, p.glass, z=scope_z, bevel=0.0)
+    export_model("Crossbow")
+
+
 BUILDERS = {
     "TranquilizerPistol": tranquilizer_pistol,
-    "ShockPistol": shock_pistol,
     "SedativeSMG": sedative_smg,
     "PrecisionRifle": precision_rifle,
     "AssaultRifle": assault_rifle,
     "GrenadeLauncher": grenade_launcher,
     "RocketLauncher": rocket_launcher,
+    "Crossbow": crossbow,
 }
 
 for model_name, builder in BUILDERS.items():

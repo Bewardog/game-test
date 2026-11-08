@@ -15,7 +15,6 @@ public enum WeaponRound
 {
     Dart,       // tranquilizer dart: sedates, instant knockout on a headshot
     Bullet,     // lethal round
-    ShockBolt,  // electric stun bolt: sedates
     Grenade,    // arcing explosive round
     Rocket      // straight-flying explosive rocket
 }
@@ -41,6 +40,8 @@ public class WeaponDefinition : ScriptableObject
     [Header("Rounds")]
     public WeaponRound round = WeaponRound.Dart;
     public float reloadDuration = 1.15f;
+    [Tooltip("Darts are fired as crossbow bolts: a bigger, slower round that stays stuck longer.")]
+    public bool firesBolts;
 
     [Header("Dual ammo (switch with X)")]
     [Tooltip("The weapon can also load lethal bullets, with their own ammo.")]
@@ -92,6 +93,12 @@ public class WeaponDefinition : ScriptableObject
         return this;
     }
 
+    public WeaponDefinition WithBolts()
+    {
+        firesBolts = true;
+        return this;
+    }
+
     public WeaponDefinition WithReload(float seconds)
     {
         reloadDuration = seconds;
@@ -107,8 +114,9 @@ public class WeaponDefinition : ScriptableObject
                 return "Models/Weapons/SedativeSMG";
             case "tranq-rifle":
                 return "Models/Weapons/PrecisionRifle";
+            case "tranq-crossbow":
             case "shock-pistol":
-                return "Models/Weapons/ShockPistol";
+                return "Models/Weapons/Crossbow";
             case "assault-rifle":
                 return "Models/Weapons/AssaultRifle";
             case "grenade-launcher":

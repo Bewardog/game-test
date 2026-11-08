@@ -519,7 +519,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             20 + clearanceLevel * 10);
 
         string rewardWeaponId = clearanceLevel == 1
-            ? "shock-pistol"
+            ? "tranq-crossbow"
             : clearanceLevel == 2
                 ? "dart-smg"
                 : "tranq-rifle";
@@ -783,7 +783,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             if (prototypeWeapon)
             {
                 GameObject weaponPrefab = Resources.Load<GameObject>(
-                    "Models/Weapons/ShockPistol");
+                    "Models/Weapons/Crossbow");
                 if (weaponPrefab != null)
                 {
                     GameObject weaponDisplay = Instantiate(weaponPrefab, objective.transform);
@@ -8442,7 +8442,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         switch (specialization)
         {
             case OperativeSpecialization.Stealth:
-                droppedWeapon = GameFlowManager.Instance.GetWeapon("shock-pistol");
+                droppedWeapon = GameFlowManager.Instance.GetWeapon("tranq-crossbow");
                 break;
             case OperativeSpecialization.Tank:
                 droppedWeapon = GameFlowManager.Instance.GetWeapon("dart-smg");
@@ -8451,7 +8451,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 droppedWeapon = GameFlowManager.Instance.GetWeapon("tranq-rifle");
                 break;
             case OperativeSpecialization.Hacker:
-                droppedWeapon = GameFlowManager.Instance.GetWeapon("shock-pistol");
+                droppedWeapon = GameFlowManager.Instance.GetWeapon("tranq-crossbow");
                 break;
             case OperativeSpecialization.Medic:
                 droppedWeapon = GameFlowManager.Instance.GetWeapon("tranq-pistol");
@@ -8477,7 +8477,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             CreateSupplyCache("Arsenal Assault Cache", new Vector3(13f, 0f, 52f), 30, 35);
             CreateFloatingWeapon("Sedative SMG Comms Rack", GameFlowManager.Instance?.GetWeapon("dart-smg"), new Vector3(-24f, 4.15f, 22f));
             CreateFloatingWeapon("Precision Rifle Fabrication Rack", GameFlowManager.Instance?.GetWeapon("tranq-rifle"), new Vector3(24f, 4.15f, 22f));
-            CreateFloatingWeapon("Shock Pistol Arsenal Rack", GameFlowManager.Instance?.GetWeapon("shock-pistol"), new Vector3(0f, 7.55f, 60f));
+            CreateFloatingWeapon("Crossbow Arsenal Rack", GameFlowManager.Instance?.GetWeapon("tranq-crossbow"), new Vector3(0f, 7.55f, 60f));
         }
         else if (IsStrongholdLayout(environment))
         {

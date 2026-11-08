@@ -43,8 +43,9 @@ public class GameFlowManager : MonoBehaviour
         {
             // Ids stay the same as before so existing saves keep their unlocks.
             // Pistol and precision rifle are dual-use (darts or bullets, X to
-            // switch); the SMG and assault rifle fire bullets only; the shock
-            // pistol stuns; the launchers fire explosives for groups.
+            // switch); the SMG and assault rifle fire bullets only; the
+            // crossbow fires silent tranquilizer bolts; the launchers fire
+            // explosives for groups.
             weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-pistol", "Tranquilizer Pistol", WeaponClass.Pistol, 35f, 0f, 0.45f, 80f, 12, 0)
                 .WithRound(WeaponRound.Dart)
                 .WithBulletMode(34f, 12, 36, 120, 12));
@@ -57,8 +58,11 @@ public class GameFlowManager : MonoBehaviour
                 .WithRound(WeaponRound.Bullet)
                 .WithMagazine(30, 90, 270)
                 .WithReload(1.6f));
-            weaponCatalog.Add(WeaponDefinition.CreateRuntime("shock-pistol", "Shock Pistol", WeaponClass.Pistol, 48f, 0f, 0.7f, 65f, 10, 3)
-                .WithRound(WeaponRound.ShockBolt));
+            weaponCatalog.Add(WeaponDefinition.CreateRuntime("tranq-crossbow", "Tranquilizer Crossbow", WeaponClass.Gadget, 60f, 0f, 0.9f, 70f, 6, 3)
+                .WithRound(WeaponRound.Dart)
+                .WithBolts()
+                .WithMagazine(1, 12, 30)
+                .WithReload(1.3f));
             weaponCatalog.Add(WeaponDefinition.CreateRuntime("grenade-launcher", "Grenade Launcher", WeaponClass.Heavy, 0f, 110f, 0.85f, 60f, 3, 3)
                 .WithRound(WeaponRound.Grenade)
                 .WithMagazine(6, 12, 30)
