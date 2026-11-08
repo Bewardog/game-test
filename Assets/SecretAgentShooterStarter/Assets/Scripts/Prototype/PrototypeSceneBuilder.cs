@@ -4711,7 +4711,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             "Ground Logistics Directory",
             new Vector3(0f, 0f, 20.5f),
             "G  LOGISTICS",
-            "MISSION OPERATIONS  >  SOUTH-EAST\nMEDICAL BAY  >  NORTH-EAST\nMECH HANGAR  VIA WEST COURTYARD",
+            "MISSION OPERATIONS  >  OFF RECEPTION\nMEDICAL BAY  >  NORTH-EAST\nMECH HANGAR  VIA WEST COURTYARD",
             new Color(0.16f, 0.76f, 0.72f));
         CreateLairDirectoryPylon(
             "Operations Directory",
@@ -4906,24 +4906,18 @@ public class PrototypeSceneBuilder : MonoBehaviour
         const float receptionDepth = 20.5f;
         const float receptionHeight = 6.5f;
 
-        CreateBlock(
-            "Reception West Wall",
-            new Vector3(-12.5f, receptionHeight * 0.5f, receptionCenterZ),
-            new Vector3(0.4f, receptionHeight, receptionDepth),
-            receptionWall);
-        CreateBlock(
-            "Reception East Wall",
-            new Vector3(12.5f, receptionHeight * 0.5f, receptionCenterZ),
-            new Vector3(0.4f, receptionHeight, receptionDepth),
-            receptionWall);
+        // The reception hall spans the full width of the building, wall to wall,
+        // so there are no dead pockets beside it. Its sides are the lair walls.
+        float hallHalfWidth = LairHalfWidth - 0.3f;
         CreateBlock(
             "Reception Ceiling",
             new Vector3(0f, receptionHeight, receptionCenterZ),
-            new Vector3(25f, 0.4f, receptionDepth),
+            new Vector3(hallHalfWidth * 2f, 0.4f, receptionDepth),
             receptionCeiling);
 
-        CreateBlock("Reception Atrium Wall West", new Vector3(-8f, 3.25f, -4f), new Vector3(9f, 6.5f, 0.4f), receptionWall);
-        CreateBlock("Reception Atrium Wall East", new Vector3(8f, 3.25f, -4f), new Vector3(9f, 6.5f, 0.4f), receptionWall);
+        float atriumWallWidth = hallHalfWidth - 3.5f;
+        CreateBlock("Reception Atrium Wall West", new Vector3(-(3.5f + atriumWallWidth * 0.5f), 3.25f, -4f), new Vector3(atriumWallWidth, 6.5f, 0.4f), receptionWall);
+        CreateBlock("Reception Atrium Wall East", new Vector3(3.5f + atriumWallWidth * 0.5f, 3.25f, -4f), new Vector3(atriumWallWidth, 6.5f, 0.4f), receptionWall);
         CreateBlock("Reception Atrium Door Header", new Vector3(0f, 5.6f, -4f), new Vector3(7f, 1.8f, 0.4f), receptionWall);
         CreateBlock("Atrium Scanner West", new Vector3(-3.85f, 2.35f, -4.2f), new Vector3(0.35f, 4.7f, 0.65f), accentColor);
         CreateBlock("Atrium Scanner East", new Vector3(3.85f, 2.35f, -4.2f), new Vector3(0.35f, 4.7f, 0.65f), accentColor);
@@ -4955,13 +4949,19 @@ public class PrototypeSceneBuilder : MonoBehaviour
             new Vector3(0f, 1.4f, 0f));
 
         float[] receptionLights = { -21f, -13f, -5.5f };
+        float[] receptionLightX = { -14f, 0f, 14f };
         for (int light = 0; light < receptionLights.Length; light++)
         {
-            CreateFacilityCeilingLight(
-                $"Reception Ceiling Light {light + 1}",
-                new Vector3(0f, 6.12f, receptionLights[light]),
-                accentColor,
-                15f);
+            foreach (float x in receptionLightX)
+            {
+                CreateFacilityCeilingLight(
+                    $"Reception Ceiling Light {light + 1} {x:0}",
+                    new Vector3(x, 6.12f, receptionLights[light]),
+                    accentColor,
+                    15f,
+                    null,
+                    2.2f);
+            }
         }
 
         CreateWorldLabel("RECEPTION", new Vector3(0f, 5.15f, -23.9f), Color.white, 0.16f);
