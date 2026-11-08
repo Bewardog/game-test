@@ -5381,6 +5381,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
             accentColor,
             parent);
         DisableChildColliders(modeledShell);
+        if (!hubRoomHasAtriumDoor)
+        {
+            // The modeled bay's end walls land on the hangar's north and south
+            // walls; the south one would cover the exterior doorway. The room's
+            // own walls already enclose the space, so hide both.
+            HideModelParts(modeledShell, "Left Wall", "Right Wall");
+        }
 
         if (!hubRoomHasAtriumDoor)
         {
