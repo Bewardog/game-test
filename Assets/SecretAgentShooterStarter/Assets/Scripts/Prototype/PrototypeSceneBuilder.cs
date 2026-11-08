@@ -4980,7 +4980,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateBlock("Exterior Grass Ground", new Vector3(0f, -0.6f, -20f), new Vector3(4000f, 1f, 4000f), grass, parent);
 
         // Access road from the courtyard gate running south into the distance.
-        float roadStart = -70.5f;
+        float roadStart = -69.5f;
         float roadEnd = -1500f;
         float roadLength = roadStart - roadEnd;
         float roadCenter = (roadStart + roadEnd) * 0.5f;
@@ -5033,8 +5033,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
     }
 
-    // Guarded perimeter around the facility grounds: a wall with a manned
-    // checkpoint on the south road, east and west service gates (the routes an
+    // Guarded perimeter around the facility grounds, the facility's only wall
+    // line: a manned main gate with the AERIE archway on the south road, east and west service gates (the routes an
     // attack would come in by), and watchtowers with searchlights.
     private const float PerimeterHalfX = 118f;
     private const float PerimeterSouthZ = -128f;
@@ -5070,11 +5070,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         // South checkpoint: gate pillars, a raised boom barrier, guard booth,
         // stop line, and a sign.
-        for (int side = -1; side <= 1; side += 2)
-        {
-            CreateBlock($"Checkpoint Gate Pillar {(side < 0 ? "W" : "E")}", new Vector3(side * PerimeterGateHalfWidth, 2.6f, PerimeterSouthZ), new Vector3(1.2f, 5.4f, 1.2f), capColor, parent);
-        }
-
         Vector3 boomPivot = new Vector3(-PerimeterGateHalfWidth + 1f, 1.1f, PerimeterSouthZ - 1.2f);
         CreateBlock("Checkpoint Boom Barrier Post", boomPivot + new Vector3(0f, -0.55f, 0f), new Vector3(0.5f, 1.1f, 0.5f), capColor, parent);
         GameObject boom = new GameObject("Checkpoint Boom Barrier Arm");
@@ -5098,7 +5093,18 @@ public class PrototypeSceneBuilder : MonoBehaviour
             boothCollider.size = new Vector3(4f, 3f, 3f);
         }
 
-        CreateWorldLabel("THE AERIE  //  RESTRICTED FACILITY\nAUTHORIZED PERSONNEL ONLY", new Vector3(-PerimeterGateHalfWidth - 6f, 2.6f, PerimeterSouthZ - 0.4f), Color.white, 0.16f, parent);
+        // Main gate archway (moved out from the old inner courtyard gate).
+        Color archAccent = new Color(0.16f, 0.76f, 0.72f);
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateBlock($"Main Gate Arch Tower {(side < 0 ? "W" : "E")}", new Vector3(side * (PerimeterGateHalfWidth + 0.9f), 3.6f, PerimeterSouthZ), new Vector3(1.8f, 7.4f, 1.8f), capColor, parent);
+            CreateDecorationBlock($"Main Gate Arch Tower Light {(side < 0 ? "W" : "E")}", new Vector3(side * PerimeterGateHalfWidth, 3.6f, PerimeterSouthZ - 0.92f), new Vector3(0.12f, 6.4f, 0.06f), archAccent, parent);
+        }
+
+        CreateBlock("Main Gate Arch Header", new Vector3(0f, 7.6f, PerimeterSouthZ), new Vector3(PerimeterGateHalfWidth * 2f + 3.6f, 1.4f, 1.8f), capColor, parent);
+        CreateDecorationBlock("Main Gate Arch Header Light", new Vector3(0f, 6.95f, PerimeterSouthZ - 0.92f), new Vector3(PerimeterGateHalfWidth * 2f + 3f, 0.12f, 0.06f), archAccent, parent);
+        CreateWorldLabel("THE AERIE", new Vector3(0f, 7.6f, PerimeterSouthZ - 1f), Color.white, 0.34f, parent);
+        CreateWorldLabel("RESTRICTED FACILITY\nAUTHORIZED PERSONNEL ONLY", new Vector3(-PerimeterGateHalfWidth - 6f, 2.6f, PerimeterSouthZ - 0.4f), Color.white, 0.16f, parent);
 
         // Watchtowers at the corners and either side of the checkpoint.
         Vector3[] towers =
@@ -5504,24 +5510,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
             new Vector3(0f, -0.46f, courtyardCenterZ),
             new Vector3(54f, 0.8f, courtyardDepth),
             courtyardFloor);
-        // The north part of the west retaining wall is left open onto the
-        // mech hangar's driveway apron.
-        CreateBlock(
-            "Courtyard West Retaining Wall",
-            new Vector3(-27f, 1.45f, -57.5f),
-            new Vector3(0.55f, 3.2f, 25f),
-            wallColor);
-        CreateBlock(
-            "Courtyard East Retaining Wall",
-            new Vector3(27f, 1.45f, courtyardCenterZ),
-            new Vector3(0.55f, 3.2f, courtyardDepth),
-            wallColor);
-
-        CreateBlock("Courtyard Gate West", new Vector3(-16.5f, 1.45f, -70f), new Vector3(21f, 3.2f, 0.55f), wallColor);
-        CreateBlock("Courtyard Gate East", new Vector3(16.5f, 1.45f, -70f), new Vector3(21f, 3.2f, 0.55f), wallColor);
-        CreateBlock("Courtyard Gate Pillar West", new Vector3(-6f, 2.6f, -70f), new Vector3(1.1f, 5.4f, 1.1f), platformColor);
-        CreateBlock("Courtyard Gate Pillar East", new Vector3(6f, 2.6f, -70f), new Vector3(1.1f, 5.4f, 1.1f), platformColor);
-        CreateBlock("Courtyard Gate Header", new Vector3(0f, 5.05f, -70f), new Vector3(13f, 0.8f, 1.1f), accentColor);
+        // The courtyard is open paving inside the facility grounds; the only
+        // wall line is the outer perimeter, whose main gate carries the AERIE
+        // archway. A low curb finishes the paving's edges.
+        Color curbColor = new Color(0.2f, 0.22f, 0.23f);
+        CreateDecorationBlock("Courtyard South Curb", new Vector3(0f, 0.02f, courtyardCenterZ - courtyardDepth * 0.5f), new Vector3(54f, 0.16f, 0.4f), curbColor);
+        CreateDecorationBlock("Courtyard East Curb", new Vector3(27f, 0.02f, courtyardCenterZ), new Vector3(0.4f, 0.16f, courtyardDepth), curbColor);
+        CreateDecorationBlock("Courtyard West Curb", new Vector3(-27f, 0.02f, -57.5f), new Vector3(0.4f, 0.16f, 25f), curbColor);
 
         CreateDecorationBlock(
             "Courtyard Main Approach",
@@ -5603,7 +5598,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
             CreateFacilityLamp($"Aerie Courtyard Lamp {light + 1}", courtyardLights[light]);
         }
 
-        CreateWorldLabel("THE AERIE", new Vector3(0f, 4.35f, -69.55f), Color.white, 0.22f);
     }
 
     private void CreateLairReceptionHub(Color wallColor, Color platformColor, Color accentColor)
@@ -6924,8 +6918,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float centerZ = (apronNorthZ + apronSouthZ) * 0.5f;
 
         CreateBlock("Hangar Apron Courtyard Floor", new Vector3((minX + maxX) * 0.5f, -0.46f, centerZ), new Vector3(maxX - minX, 0.8f, depth), apronFloor);
-        CreateBlock("Hangar Apron Outer Retaining Wall", new Vector3(apronOuterX, 1.45f, centerZ), new Vector3(0.55f, 3.2f, depth), wallColor);
-        CreateBlock("Hangar Apron South Retaining Wall", new Vector3((minX + maxX) * 0.5f, 1.45f, apronSouthZ), new Vector3(maxX - minX, 3.2f, 0.55f), wallColor);
+        CreateDecorationBlock("Hangar Apron Outer Curb", new Vector3(apronOuterX, 0.02f, centerZ), new Vector3(0.4f, 0.16f, depth), wallColor);
+        CreateDecorationBlock("Hangar Apron South Curb", new Vector3((minX + maxX) * 0.5f, 0.02f, apronSouthZ), new Vector3(maxX - minX, 0.16f, 0.4f), wallColor);
 
         CreateDecorationBlock("Hangar Apron Approach", new Vector3(spec.ExteriorDoorX, -0.015f, centerZ), new Vector3(spec.doorWidth, 0.08f, depth - 1f), new Color(0.15f, 0.17f, 0.19f));
         for (int edge = -1; edge <= 1; edge += 2)
