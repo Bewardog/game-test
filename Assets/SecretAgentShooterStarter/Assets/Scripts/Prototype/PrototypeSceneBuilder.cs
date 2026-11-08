@@ -4382,9 +4382,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateLairSideWall(1f, wall);
         CreateLairAnnexShell(-1f, wall);
         CreateLairAnnexShell(1f, wall);
-        CreateBlock("South Facade West", new Vector3(-13.5f, 12.5f, -25f), new Vector3(17f, wallHeight, 0.6f), wall);
-        CreateBlock("South Facade East", new Vector3(13.5f, 12.5f, -25f), new Vector3(17f, wallHeight, 0.6f), wall);
-        CreateBlock("South Facade Entrance Header", new Vector3(0f, 16.25f, -25f), new Vector3(10f, 18.5f, 0.6f), wall);
+        CreateLairFrontFacade(wall, rail);
         CreateBlock("North Wall", new Vector3(0f, 12.5f, 35f), new Vector3(lairWidth, wallHeight, 0.6f), wall);
         CreateBlock("Lair Roof West", new Vector3(-13f, LairRoofY, lairCenterZ), new Vector3(17f, 0.6f, lairDepth), shaft);
         CreateBlock("Lair Roof East", new Vector3(13f, LairRoofY, lairCenterZ), new Vector3(17f, 0.6f, lairDepth), shaft);
@@ -4684,6 +4682,181 @@ public class PrototypeSceneBuilder : MonoBehaviour
             color);
     }
 
+    // Front facade of the main building, with glazed openings: glass entrance
+    // doors, lounge windows either side of the entrance, and a band of
+    // windows on Levels 2 and 3 overlooking the courtyard approach. The upper
+    // bands double as defensive firing positions: the glass is bulletproof
+    // one-way glass that stops incoming fire but lets the player shoot out.
+    private void CreateLairFrontFacade(Color wallColor, Color accentColor)
+    {
+        const float facadeZ = -25f;
+        const float bottom = -0.5f;
+        float top = LairRoofY;
+        float minX = -(LairHalfWidth + 0.3f);
+        float maxX = LairHalfWidth + 0.3f;
+
+        Rect entrance = Rect.MinMaxRect(-5f, bottom, 5f, 7f);
+        List<Rect> windows = new List<Rect>
+        {
+            // Ground floor: reception lounge windows.
+            Rect.MinMaxRect(-19f, 1f, -7f, 4.2f),
+            Rect.MinMaxRect(7f, 1f, 19f, 4.2f)
+        };
+
+        float[] upperFloors = { LairOperationsY + 0.2f, LairCommandY + 0.2f };
+        foreach (float floorY in upperFloors)
+        {
+            float sill = floorY + 1f;
+            float head = floorY + 3.2f;
+            windows.Add(Rect.MinMaxRect(-20.5f, sill, -6f, head));
+            windows.Add(Rect.MinMaxRect(-4f, sill, 4f, head));
+            windows.Add(Rect.MinMaxRect(6f, sill, 20.5f, head));
+        }
+
+        List<Rect> openings = new List<Rect>(windows) { entrance };
+        CreateWallWithOpeningsX("South Facade", facadeZ, minX, maxX, bottom, top, 0.6f, openings, wallColor);
+
+        foreach (Rect window in windows)
+        {
+            CreateGlazedOpening("Facade", window, facadeZ, accentColor);
+        }
+
+        // Glass sliding doors at the main entrance.
+        SlidingSecurityDoor entranceDoor = CreateSlidingSecurityDoor(
+            "Main Entrance Glass Door",
+            new Vector3(0f, (entrance.yMin + entrance.yMax) * 0.5f + 0.25f, facadeZ),
+            Quaternion.identity,
+            entrance.width,
+            entrance.height - 0.5f,
+            new Color(0.6f, 0.75f, 0.8f),
+            accentColor);
+        entranceDoor.closeDelay = 1.5f;
+        foreach (Transform panel in new[] { entranceDoor.leftPanel, entranceDoor.rightPanel })
+        {
+            if (panel == null) continue;
+            panel.name = panel.name.Replace("Panel", "Defense Glass Panel");
+            ApplyGlassMaterial(panel.gameObject);
+        }
+    }
+
+    // A glass pane in an opening, with a frame, mullions roughly every three
+    // metres, and a sill on the inside that works as waist-high cover.
+    private void CreateGlazedOpening(string prefix, Rect opening, float wallZ, Color accentColor)
+    {
+        Color frameColor = new Color(0.1f, 0.12f, 0.13f);
+        float centerX = (opening.xMin + opening.xMax) * 0.5f;
+        float centerY = (opening.yMin + opening.yMax) * 0.5f;
+
+        GameObject glass = CreateBlock(
+            $"{prefix} Defense Glass {centerX:0}_{centerY:0}",
+            new Vector3(centerX, centerY, wallZ),
+            new Vector3(opening.width, opening.height, 0.06f),
+            new Color(0.6f, 0.75f, 0.8f));
+        ApplyGlassMaterial(glass);
+
+        CreateDecorationBlock($"{prefix} Glazing Frame Top {centerX:0}_{centerY:0}", new Vector3(centerX, opening.yMax - 0.05f, wallZ), new Vector3(opening.width, 0.1f, 0.16f), frameColor);
+        CreateDecorationBlock($"{prefix} Glazing Frame Bottom {centerX:0}_{centerY:0}", new Vector3(centerX, opening.yMin + 0.05f, wallZ), new Vector3(opening.width, 0.1f, 0.16f), frameColor);
+        int mullions = Mathf.Max(0, Mathf.RoundToInt(opening.width / 3f) - 1);
+        for (int i = 1; i <= mullions; i++)
+        {
+            float x = opening.xMin + opening.width * i / (mullions + 1);
+            CreateDecorationBlock($"{prefix} Glazing Mullion {centerX:0}_{centerY:0}_{i}", new Vector3(x, centerY, wallZ), new Vector3(0.08f, opening.height, 0.14f), frameColor);
+        }
+
+        // Interior sill shelf, slightly lit along its edge.
+        CreateBlock($"{prefix} Glazing Sill Bench {centerX:0}_{centerY:0}", new Vector3(centerX, opening.yMin - 0.05f, wallZ + 0.45f), new Vector3(opening.width, 0.1f, 0.6f), frameColor);
+        CreateDecorationBlock($"{prefix} Glazing Sill Strip {centerX:0}_{centerY:0}", new Vector3(centerX, opening.yMin - 0.1f, wallZ + 0.76f), new Vector3(opening.width, 0.03f, 0.03f), accentColor);
+    }
+
+    // Solid wall in the X-Y plane with rectangular openings cut out of it.
+    private void CreateWallWithOpeningsX(string wallName, float z, float minX, float maxX, float bottom, float top, float thickness, List<Rect> openings, Color color)
+    {
+        List<float> xCuts = new List<float> { minX, maxX };
+        List<float> yCuts = new List<float> { bottom, top };
+        foreach (Rect opening in openings)
+        {
+            xCuts.Add(Mathf.Clamp(opening.xMin, minX, maxX));
+            xCuts.Add(Mathf.Clamp(opening.xMax, minX, maxX));
+            yCuts.Add(Mathf.Clamp(opening.yMin, bottom, top));
+            yCuts.Add(Mathf.Clamp(opening.yMax, bottom, top));
+        }
+
+        xCuts.Sort();
+        yCuts.Sort();
+        int index = 0;
+        for (int xi = 0; xi < xCuts.Count - 1; xi++)
+        {
+            float x0 = xCuts[xi];
+            float x1 = xCuts[xi + 1];
+            if (x1 - x0 < 0.01f) continue;
+
+            float runStart = float.NaN;
+            for (int yi = 0; yi < yCuts.Count - 1; yi++)
+            {
+                float y0 = yCuts[yi];
+                float y1 = yCuts[yi + 1];
+                if (y1 - y0 < 0.01f) continue;
+
+                Vector2 cell = new Vector2((x0 + x1) * 0.5f, (y0 + y1) * 0.5f);
+                bool open = false;
+                foreach (Rect opening in openings)
+                {
+                    if (opening.Contains(cell))
+                    {
+                        open = true;
+                        break;
+                    }
+                }
+
+                if (!open && float.IsNaN(runStart))
+                {
+                    runStart = y0;
+                }
+                else if (open && !float.IsNaN(runStart))
+                {
+                    CreateBlock($"{wallName} Section {++index}", new Vector3((x0 + x1) * 0.5f, (runStart + y0) * 0.5f, z), new Vector3(x1 - x0, y0 - runStart, thickness), color);
+                    runStart = float.NaN;
+                }
+            }
+
+            if (!float.IsNaN(runStart))
+            {
+                CreateBlock($"{wallName} Section {++index}", new Vector3((x0 + x1) * 0.5f, (runStart + top) * 0.5f, z), new Vector3(x1 - x0, top - runStart, thickness), color);
+            }
+        }
+    }
+
+    private static Material glassMaterial;
+
+    // Transparent URP glass. Replaces the block's textured material.
+    private static void ApplyGlassMaterial(GameObject target)
+    {
+        if (target == null) return;
+        if (glassMaterial == null)
+        {
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return;
+            glassMaterial = new Material(lit) { name = "Lair Defense Glass" };
+            glassMaterial.SetFloat("_Surface", 1f);
+            glassMaterial.SetFloat("_Blend", 0f);
+            glassMaterial.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            glassMaterial.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            glassMaterial.SetFloat("_ZWrite", 0f);
+            glassMaterial.SetFloat("_Smoothness", 0.95f);
+            glassMaterial.SetFloat("_Metallic", 0.1f);
+            glassMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            glassMaterial.SetOverrideTag("RenderType", "Transparent");
+            glassMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            glassMaterial.SetColor("_BaseColor", new Color(0.55f, 0.78f, 0.85f, 0.22f));
+        }
+
+        Renderer glassRenderer = target.GetComponent<Renderer>();
+        if (glassRenderer == null) return;
+        glassRenderer.SetPropertyBlock(null);
+        glassRenderer.sharedMaterial = glassMaterial;
+        glassRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+    }
+
     private void CreateLairArchitecturalOverlays(Color accentColor)
     {
         float[] floors = { LairOperationsY, LairCommandY };
@@ -4818,26 +4991,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateBlock("Entrance Canopy West Support", new Vector3(-15f, 2.9f, -28.5f), new Vector3(1.2f, 6.2f, 5.5f), wallColor);
         CreateBlock("Entrance Canopy East Support", new Vector3(15f, 2.9f, -28.5f), new Vector3(1.2f, 6.2f, 5.5f), wallColor);
         CreateDecorationBlock("Entrance Canopy Light", new Vector3(0f, 5.78f, -30f), new Vector3(18f, 0.16f, 0.5f), accentColor);
-        CreateDecorationBlock(
-            "Facade Operations Window West",
-            new Vector3(-13.5f, 11.65f, -25.34f),
-            new Vector3(12f, 0.85f, 0.08f),
-            new Color(0.18f, 0.58f, 0.64f));
-        CreateDecorationBlock(
-            "Facade Operations Window East",
-            new Vector3(13.5f, 11.65f, -25.34f),
-            new Vector3(12f, 0.85f, 0.08f),
-            new Color(0.18f, 0.58f, 0.64f));
-        CreateDecorationBlock(
-            "Facade Command Window West",
-            new Vector3(-13.5f, 20.85f, -25.34f),
-            new Vector3(12f, 0.85f, 0.08f),
-            new Color(0.28f, 0.48f, 0.58f));
-        CreateDecorationBlock(
-            "Facade Command Window East",
-            new Vector3(13.5f, 20.85f, -25.34f),
-            new Vector3(12f, 0.85f, 0.08f),
-            new Color(0.28f, 0.48f, 0.58f));
         CreateDecorationBlock(
             "Facade Operations Divider",
             new Vector3(0f, LairOperationsY, -25.36f),

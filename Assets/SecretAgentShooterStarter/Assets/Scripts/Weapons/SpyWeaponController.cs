@@ -577,6 +577,13 @@ public class SpyWeaponController : MonoBehaviour
                 continue;
             }
 
+            // The lair's defense glass is one-way: it stops incoming fire but
+            // the player can shoot out through it.
+            if (candidate.collider.name.Contains("Defense Glass"))
+            {
+                continue;
+            }
+
             if (candidate.distance < closestDistance)
             {
                 closestHit = candidate;
