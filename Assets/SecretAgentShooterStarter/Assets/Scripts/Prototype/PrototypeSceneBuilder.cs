@@ -4431,7 +4431,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateLairReceptionHub(wall, platform, rail);
         CreateBlock("Mission Control Dais", new Vector3(0f, 0.15f, -12.5f), new Vector3(8f, 0.3f, 6f), new Color(0.23f, 0.27f, 0.29f));
         CreateWorldLabel("THE AERIE", new Vector3(0f, 23.8f, 34.6f), new Color(0.85f, 0.94f, 0.96f), 0.32f);
-        CreateWorldLabel("AERIE SECURE ACCESS", new Vector3(0f, 5.25f, -25.4f), Color.white, 0.18f);
+        CreateWorldLabel("AERIE SECURE ACCESS", new Vector3(0f, 7.9f, -25.4f), Color.white, 0.18f);
         CreateWorldLabel("LEVEL 2  OPERATIONS", new Vector3(0f, LairOperationsY + 4.3f, -24.6f), Color.white, 0.16f);
         CreateWorldLabel("LEVEL 3  COMMAND", new Vector3(0f, LairCommandY + 4.3f, -24.6f), Color.white, 0.16f);
     }
@@ -4908,7 +4908,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
 
         CreateWorldLabel("THE AERIE", new Vector3(0f, 4.35f, -69.55f), Color.white, 0.22f);
-        CreateWorldLabel("SECURE ARRIVAL COURT", new Vector3(0f, 4.85f, -25.5f), Color.white, 0.14f);
     }
 
     private void CreateLairReceptionHub(Color wallColor, Color platformColor, Color accentColor)
@@ -5128,6 +5127,14 @@ public class PrototypeSceneBuilder : MonoBehaviour
             ceilingColor,
             shell.transform);
 
+        // Everything that makes the room look furnished lives under the
+        // constructed-contents root, which the lair manager only shows once the
+        // room has been built. Unbuilt rooms are bare walls, floor, and lights.
+        GameObject contentRoot = new GameObject($"{roomType} Constructed Contents");
+        contentRoot.transform.SetParent(shell.transform, false);
+        GameObject fitOut = new GameObject($"{roomType} Base Fit-Out");
+        fitOut.transform.SetParent(contentRoot.transform, false);
+
         CreateHubRoomArchitecture(
             roomType,
             position,
@@ -5140,7 +5147,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             doorWidth,
             doorHeight,
             accentColor,
-            shell.transform);
+            fitOut.transform);
 
         float frameX = entranceWallX - sideDirection * 0.18f;
         if (hubRoomHasAtriumDoor)
@@ -5179,7 +5186,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             outerWallX,
             sideDirection,
             accentColor,
-            shell.transform);
+            fitOut.transform);
         CreateModularRoomDressing(
             roomType,
             position,
@@ -5191,7 +5198,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             sideDirection,
             doorWidth,
             accentColor,
-            shell.transform);
+            fitOut.transform);
         CreateLargeRoomStructure(
             roomType,
             position,
@@ -5203,7 +5210,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             sideDirection,
             doorWidth,
             accentColor,
-            shell.transform);
+            fitOut.transform);
         CreateRoomLightingGrid(
             $"{roomType}",
             position,
@@ -5212,9 +5219,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
             roomHeight,
             accentColor,
             shell.transform);
-
-        GameObject contentRoot = new GameObject($"{roomType} Constructed Contents");
-        contentRoot.transform.SetParent(shell.transform, false);
 
         GameObject[] levelVisuals = new GameObject[5];
         for (int i = 0; i < levelVisuals.Length; i++)
@@ -5283,10 +5287,11 @@ public class PrototypeSceneBuilder : MonoBehaviour
             accentColor,
             levelVisuals);
 
-        float terminalX = entranceWallX + sideDirection * 1.15f;
-        // Keep the upgrade console beside the doorway so it is easy to find in the larger rooms.
-        float terminalZ = Mathf.Max(position.z - roomDepth * 0.5f + 1.15f, position.z - doorWidth * 0.5f - 1.4f);
-        float terminalYaw = sideDirection < 0f ? 90f : -90f;
+        // The build/upgrade console stands outside the room, in the atrium
+        // beside the doorway, so the room can be built before anyone goes in.
+        float terminalX = entranceWallX - sideDirection * 1.2f;
+        float terminalZ = position.z - doorWidth * 0.5f - 1.6f;
+        float terminalYaw = sideDirection < 0f ? -90f : 90f;
         if (spec.exteriorDoor)
         {
             // Outside on the driveway, beside the door, so the room can be
@@ -6465,12 +6470,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         labelObject.transform.SetParent(parent != null ? parent : runtimeRoot, true);
 
         TextMesh label = labelObject.AddComponent<TextMesh>();
-        label.text = text;
-        label.color = color;
-        label.anchor = TextAnchor.MiddleCenter;
-        label.alignment = TextAlignment.Center;
-        label.characterSize = characterSize * 0.2f;
-        label.fontSize = 48;
+        ConfigureWorldText(label, text, color, characterSize);
 
         if (floatingTag)
         {
@@ -6480,6 +6480,55 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
 
         MountWorldLabel(labelObject, label, characterSize);
+    }
+
+    private static Font worldTextFont;
+    private static Material worldTextMaterial;
+
+    // TextMesh with a depth-tested material so sign text sits on its plate
+    // instead of drawing through walls and through the back of the sign.
+    // A larger font size with a smaller character size keeps it sharp.
+    private static void ConfigureWorldText(TextMesh textMesh, string text, Color color, float characterSize)
+    {
+        if (worldTextFont == null)
+        {
+            worldTextFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font.textureRebuilt += OnWorldTextFontRebuilt;
+        }
+
+        if (worldTextMaterial == null && worldTextFont != null)
+        {
+            Shader shader = Resources.Load<Shader>("Shaders/WorldText");
+            if (shader != null)
+            {
+                worldTextMaterial = new Material(shader) { name = "World Text Material" };
+                worldTextMaterial.mainTexture = worldTextFont.material.mainTexture;
+            }
+        }
+
+        textMesh.text = text;
+        textMesh.color = color;
+        textMesh.anchor = TextAnchor.MiddleCenter;
+        textMesh.alignment = TextAlignment.Center;
+        textMesh.fontSize = 96;
+        textMesh.characterSize = characterSize * 0.1f;
+        if (worldTextFont != null) textMesh.font = worldTextFont;
+
+        MeshRenderer textRenderer = textMesh.GetComponent<MeshRenderer>();
+        if (textRenderer != null)
+        {
+            textRenderer.sharedMaterial = worldTextMaterial != null
+                ? worldTextMaterial
+                : worldTextFont != null ? worldTextFont.material : textRenderer.sharedMaterial;
+        }
+    }
+
+    private static void OnWorldTextFontRebuilt(Font font)
+    {
+        if (font == worldTextFont && worldTextMaterial != null)
+        {
+            worldTextMaterial.mainTexture = font.material.mainTexture;
+        }
     }
 
     // Turns a label into a physical sign: mounted flat on a nearby wall with a
@@ -6534,16 +6583,31 @@ public class PrototypeSceneBuilder : MonoBehaviour
         backText.transform.localPosition = new Vector3(0f, 0f, 0.07f);
         backText.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
         TextMesh backLabel = backText.AddComponent<TextMesh>();
-        backLabel.text = label.text;
-        backLabel.color = label.color;
-        backLabel.anchor = label.anchor;
-        backLabel.alignment = label.alignment;
-        backLabel.characterSize = label.characterSize;
-        backLabel.fontSize = label.fontSize;
+        ConfigureWorldText(backLabel, label.text, label.color, characterSize);
 
         Vector3 plateBottom = position + Vector3.down * (plateHeight * 0.5f);
-        if (Physics.Raycast(plateBottom, Vector3.down, out RaycastHit floorHit, 6f, ~0, QueryTriggerInteraction.Ignore)
-            && floorHit.distance > 0.25f)
+        Vector3 plateTop = position + Vector3.up * (plateHeight * 0.5f);
+        bool hasFloor = Physics.Raycast(plateBottom, Vector3.down, out RaycastHit floorHit, 6f, ~0, QueryTriggerInteraction.Ignore);
+        bool hasCeiling = Physics.Raycast(plateTop, Vector3.up, out RaycastHit ceilingHit, 3f, ~0, QueryTriggerInteraction.Ignore);
+
+        // Signs high off the floor under a ceiling hang from it on two rods.
+        if (hasCeiling && (!hasFloor || floorHit.distance > 2f))
+        {
+            float rodLength = ceilingHit.distance;
+            for (int rod = -1; rod <= 1; rod += 2)
+            {
+                CreateSignPart(
+                    labelObject,
+                    "Signage Hanger Post",
+                    new Vector3(rod * Mathf.Max(0.1f, plateWidth * 0.5f - 0.2f), plateHeight * 0.5f + rodLength * 0.5f, 0.035f),
+                    new Vector3(0.04f, rodLength, 0.04f),
+                    new Color(0.12f, 0.14f, 0.15f));
+            }
+
+            return;
+        }
+
+        if (hasFloor && floorHit.distance > 0.25f)
         {
             float postLength = floorHit.distance;
             CreateSignPart(
