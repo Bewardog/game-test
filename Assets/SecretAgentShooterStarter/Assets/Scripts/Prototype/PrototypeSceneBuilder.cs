@@ -32,6 +32,88 @@ public class PrototypeSceneBuilder : MonoBehaviour
     private const float LairCommandY = 19f;
     private const float LairRoofY = 25.5f;
     private const float LairRoomHeight = 5.2f;
+    // Half-width of the central atrium building. Department rooms are built as
+    // full-size annexes beyond these side walls instead of boxes inside the wings.
+    private const float LairHalfWidth = 22f;
+    private const float LairDepthMinZ = -25f;
+    private const float LairDepthMaxZ = 35f;
+    private const float LairWallHeight = 26f;
+    private const float HangarMechScale = 1.8f;
+
+    private struct LairRoomSpec
+    {
+        public RoomType roomType;
+        public bool isRecruitQuarters;
+        public float side;          // -1 = west annex, +1 = east annex
+        public float floorY;        // walking surface height of the room floor
+        public float centerZ;
+        public float width;         // extent along X, measured outward from the atrium wall
+        public float depth;         // extent along Z
+        public float height;        // floor to ceiling
+        public float doorWidth;
+        public float doorHeight;
+        public Vector2 legacySize;  // original room footprint, used to spread props proportionally
+
+        public Vector3 Position => new Vector3(side * (LairHalfWidth + width * 0.5f), floorY, centerZ);
+        public float EntranceWallX => side * LairHalfWidth;
+        public float OuterWallX => side * (LairHalfWidth + width);
+    }
+
+    // Edit these numbers to resize or move a lair department.
+    // Rooms on the same side and level must not overlap along Z, and must stay
+    // between LairDepthMinZ and LairDepthMaxZ.
+    private static readonly LairRoomSpec[] LairRoomSpecs =
+    {
+        Room(RoomType.Garage,                 -1f, 0f,                     6f,  34f, 46f, 9f,   12f,  7f,   15f, 18f),
+        Room(RoomType.MedicalBay,              1f, 0f,                     6f,  24f, 26f, 8.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.Armory,                 -1f, LairOperationsY + 0.2f, -12f, 22f, 23f, 8.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.TrainingRoom,           -1f, LairOperationsY + 0.2f, 17f,  30f, 32f, 8.5f, 6f,   4.5f, 14f, 17f),
+        Room(RoomType.ResearchLab,             1f, LairOperationsY + 0.2f, -6f,  26f, 30f, 8.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.OperativeCustomization, -1f, LairCommandY + 0.2f,    -8f,  22f, 24f, 7.5f, 4.4f, 4f,   11f, 11f),
+        Room(RoomType.IntelCenter,             1f, LairCommandY + 0.2f,    -11f, 26f, 25f, 7.5f, 4.4f, 4f,   10f, 11f),
+        Room(RoomType.IntelCenter,             1f, LairCommandY + 0.2f,    17f,  24f, 28f, 7.5f, 4.4f, 4f,   11f, 13f, true),
+    };
+
+    private static LairRoomSpec Room(
+        RoomType roomType,
+        float side,
+        float floorY,
+        float centerZ,
+        float width,
+        float depth,
+        float height,
+        float doorWidth,
+        float doorHeight,
+        float legacyWidth,
+        float legacyDepth,
+        bool isRecruitQuarters = false)
+    {
+        return new LairRoomSpec
+        {
+            roomType = roomType,
+            isRecruitQuarters = isRecruitQuarters,
+            side = side,
+            floorY = floorY,
+            centerZ = centerZ,
+            width = width,
+            depth = depth,
+            height = height,
+            doorWidth = doorWidth,
+            doorHeight = doorHeight,
+            legacySize = new Vector2(legacyWidth, legacyDepth)
+        };
+    }
+
+    // Scales hard-coded prop offsets from the original small rooms up to the
+    // current room's size. Reset to one outside room construction.
+    private Vector2 hubRoomSpread = Vector2.one;
+    private float hubRoomHeight = LairRoomHeight;
+
+    private Vector3 Spread(Vector3 offset)
+    {
+        return new Vector3(offset.x * hubRoomSpread.x, offset.y, offset.z * hubRoomSpread.y);
+    }
+
     // Visual roster for the future Hand-to-Hand Grunt melee class. The formal
     // class and its behavior remain intentionally unimplemented.
     private static readonly string[] HandToHandGruntModels =
@@ -3205,7 +3287,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float doorCenterZ,
         float doorWidth,
         Color color,
-        Transform parent = null)
+        Transform parent = null,
+        float doorHeight = -1f)
     {
         float minZ = centerZ - depth * 0.5f;
         float maxZ = centerZ + depth * 0.5f;
@@ -3232,6 +3315,24 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 new Vector3(0.32f, height, northDepth),
                 color,
                 parent);
+        }
+
+        if (doorHeight > 0f)
+        {
+            // Explicit door height: the header fills everything above the opening.
+            float bottom = y - height * 0.5f;
+            float headerHeight = height - doorHeight;
+            if (headerHeight > 0.05f)
+            {
+                CreateBlock(
+                    $"{wallName} Header",
+                    new Vector3(x, bottom + doorHeight + headerHeight * 0.5f, doorCenterZ),
+                    new Vector3(0.32f, headerHeight, doorWidth),
+                    color,
+                    parent);
+            }
+
+            return;
         }
 
         CreateBlock(
@@ -4265,8 +4366,10 @@ public class PrototypeSceneBuilder : MonoBehaviour
         const float wingDepth = 56f;
 
         CreateBlock("Ground Floor", new Vector3(0f, -0.55f, lairCenterZ), new Vector3(lairWidth, 1f, lairDepth), floor);
-        CreateBlock("West Wall", new Vector3(-22f, 12.5f, lairCenterZ), new Vector3(0.6f, wallHeight, lairDepth), wall);
-        CreateBlock("East Wall", new Vector3(22f, 12.5f, lairCenterZ), new Vector3(0.6f, wallHeight, lairDepth), wall);
+        CreateLairSideWall(-1f, wall);
+        CreateLairSideWall(1f, wall);
+        CreateLairAnnexShell(-1f, wall);
+        CreateLairAnnexShell(1f, wall);
         CreateBlock("South Facade West", new Vector3(-13.5f, 12.5f, -25f), new Vector3(17f, wallHeight, 0.6f), wall);
         CreateBlock("South Facade East", new Vector3(13.5f, 12.5f, -25f), new Vector3(17f, wallHeight, 0.6f), wall);
         CreateBlock("South Facade Entrance Header", new Vector3(0f, 16.25f, -25f), new Vector3(10f, 18.5f, 0.6f), wall);
@@ -4349,6 +4452,124 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateWorldLabel("AERIE SECURE ACCESS", new Vector3(0f, 5.25f, -25.4f), Color.white, 0.18f);
         CreateWorldLabel("LEVEL 2  OPERATIONS", new Vector3(0f, LairOperationsY + 4.3f, -24.6f), Color.white, 0.16f);
         CreateWorldLabel("LEVEL 3  COMMAND", new Vector3(0f, LairCommandY + 4.3f, -24.6f), Color.white, 0.16f);
+    }
+
+    // Builds one atrium side wall as solid blocks with an opening for every
+    // department doorway on that side.
+    private void CreateLairSideWall(float side, Color wallColor)
+    {
+        const float wallBottom = -0.5f;
+        float wallTop = wallBottom + LairWallHeight;
+        float x = side * LairHalfWidth;
+        string sideName = side < 0f ? "West" : "East";
+
+        List<Rect> openings = new List<Rect>();
+        foreach (LairRoomSpec spec in LairRoomSpecs)
+        {
+            if (!Mathf.Approximately(spec.side, side)) continue;
+            float openingWidth = spec.doorWidth + 0.2f;
+            openings.Add(new Rect(
+                spec.centerZ - openingWidth * 0.5f,
+                spec.floorY - 0.05f,
+                openingWidth,
+                spec.doorHeight + 0.1f));
+        }
+
+        List<float> zCuts = new List<float> { LairDepthMinZ, LairDepthMaxZ };
+        List<float> yCuts = new List<float> { wallBottom, wallTop };
+        foreach (Rect opening in openings)
+        {
+            zCuts.Add(Mathf.Clamp(opening.xMin, LairDepthMinZ, LairDepthMaxZ));
+            zCuts.Add(Mathf.Clamp(opening.xMax, LairDepthMinZ, LairDepthMaxZ));
+            yCuts.Add(Mathf.Clamp(opening.yMin, wallBottom, wallTop));
+            yCuts.Add(Mathf.Clamp(opening.yMax, wallBottom, wallTop));
+        }
+
+        zCuts.Sort();
+        yCuts.Sort();
+        int blockIndex = 0;
+        for (int zi = 0; zi < zCuts.Count - 1; zi++)
+        {
+            float z0 = zCuts[zi];
+            float z1 = zCuts[zi + 1];
+            if (z1 - z0 < 0.01f) continue;
+
+            float runStart = float.NaN;
+            for (int yi = 0; yi < yCuts.Count - 1; yi++)
+            {
+                float y0 = yCuts[yi];
+                float y1 = yCuts[yi + 1];
+                if (y1 - y0 < 0.01f) continue;
+
+                Vector2 cellCenter = new Vector2((z0 + z1) * 0.5f, (y0 + y1) * 0.5f);
+                bool open = false;
+                foreach (Rect opening in openings)
+                {
+                    if (opening.Contains(cellCenter))
+                    {
+                        open = true;
+                        break;
+                    }
+                }
+
+                if (!open && float.IsNaN(runStart))
+                {
+                    runStart = y0;
+                }
+                else if (open && !float.IsNaN(runStart))
+                {
+                    CreateLairWallPiece(sideName, blockIndex++, x, z0, z1, runStart, y0, wallColor);
+                    runStart = float.NaN;
+                }
+            }
+
+            if (!float.IsNaN(runStart))
+            {
+                CreateLairWallPiece(sideName, blockIndex++, x, z0, z1, runStart, wallTop, wallColor);
+            }
+        }
+    }
+
+    private void CreateLairWallPiece(string sideName, int index, float x, float z0, float z1, float y0, float y1, Color color)
+    {
+        CreateBlock(
+            $"{sideName} Wall Section {index + 1}",
+            new Vector3(x, (y0 + y1) * 0.5f, (z0 + z1) * 0.5f),
+            new Vector3(0.6f, y1 - y0, z1 - z0),
+            color);
+    }
+
+    // Encloses the department annexes on one side so they read as part of the
+    // building from the arrival courtyard instead of floating boxes.
+    private void CreateLairAnnexShell(float side, Color wallColor)
+    {
+        float outerExtent = LairHalfWidth;
+        float shellTop = LairWallHeight;
+        foreach (LairRoomSpec spec in LairRoomSpecs)
+        {
+            if (!Mathf.Approximately(spec.side, side)) continue;
+            outerExtent = Mathf.Max(outerExtent, LairHalfWidth + spec.width + 1f);
+            shellTop = Mathf.Max(shellTop, spec.floorY + spec.height + 1f);
+        }
+
+        if (outerExtent <= LairHalfWidth) return;
+
+        string sideName = side < 0f ? "West" : "East";
+        Color shellColor = Color.Lerp(wallColor, Color.black, 0.18f);
+        float innerX = side * (LairHalfWidth + 0.3f);
+        float outerX = side * outerExtent;
+        float spanX = Mathf.Abs(outerX - innerX);
+        float centerX = (innerX + outerX) * 0.5f;
+        float depth = LairDepthMaxZ - LairDepthMinZ;
+        float centerZ = (LairDepthMinZ + LairDepthMaxZ) * 0.5f;
+        float height = shellTop + 0.5f;
+        float centerY = -0.5f + height * 0.5f;
+
+        CreateBlock($"{sideName} Annex South Facade", new Vector3(centerX, centerY, LairDepthMinZ), new Vector3(spanX, height, 0.6f), wallColor);
+        CreateBlock($"{sideName} Annex North Wall", new Vector3(centerX, centerY, LairDepthMaxZ), new Vector3(spanX, height, 0.6f), shellColor);
+        CreateBlock($"{sideName} Annex Outer Wall", new Vector3(outerX, centerY, centerZ), new Vector3(0.6f, height, depth), shellColor);
+        CreateBlock($"{sideName} Annex Roof", new Vector3(centerX, shellTop, centerZ), new Vector3(spanX, 0.6f, depth), shellColor);
+        CreateBlock($"{sideName} Annex Foundation", new Vector3(centerX, -0.55f, centerZ), new Vector3(spanX, 1f, depth), new Color(0.075f, 0.095f, 0.11f));
     }
 
     private void CreateLairArchitecturalOverlays(Color accentColor)
@@ -4686,34 +4907,49 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
     private void CreateHubRoomBays()
     {
-        CreateHubRoomBay(RoomType.Garage, new Vector3(-14f, 0f, 10f), new Color(0.48f, 0.52f, 0.56f));
-        CreateHubRoomBay(RoomType.MedicalBay, new Vector3(14f, 0f, 10f), new Color(0.78f, 0.84f, 0.86f));
-        CreateHubRoomBay(RoomType.Armory, new Vector3(-14f, LairOperationsY, -8f), new Color(0.72f, 0.22f, 0.18f));
-        CreateHubRoomBay(RoomType.ResearchLab, new Vector3(14f, LairOperationsY, -8f), new Color(0.16f, 0.62f, 0.78f));
-        CreateHubRoomBay(RoomType.TrainingRoom, new Vector3(-14f, LairOperationsY, 11f), new Color(0.82f, 0.58f, 0.16f));
-        CreateHubRoomBay(RoomType.OperativeCustomization, new Vector3(-14f, LairCommandY, -8f), new Color(0.68f, 0.3f, 0.62f));
-        CreateHubRoomBay(RoomType.IntelCenter, new Vector3(14f, LairCommandY, -8f), new Color(0.28f, 0.64f, 0.38f));
+        foreach (LairRoomSpec spec in LairRoomSpecs)
+        {
+            if (spec.isRecruitQuarters) continue;
+            CreateHubRoomBay(spec, GetHubRoomAccentColor(spec.roomType));
+        }
     }
 
-    private void CreateHubRoomBay(RoomType roomType, Vector3 position, Color accentColor)
+    private static Color GetHubRoomAccentColor(RoomType roomType)
     {
+        switch (roomType)
+        {
+            case RoomType.Garage: return new Color(0.48f, 0.52f, 0.56f);
+            case RoomType.MedicalBay: return new Color(0.78f, 0.84f, 0.86f);
+            case RoomType.Armory: return new Color(0.72f, 0.22f, 0.18f);
+            case RoomType.ResearchLab: return new Color(0.16f, 0.62f, 0.78f);
+            case RoomType.TrainingRoom: return new Color(0.82f, 0.58f, 0.16f);
+            case RoomType.OperativeCustomization: return new Color(0.68f, 0.3f, 0.62f);
+            default: return new Color(0.28f, 0.64f, 0.38f);
+        }
+    }
+
+    private void CreateHubRoomBay(LairRoomSpec spec, Color accentColor)
+    {
+        RoomType roomType = spec.roomType;
+        Vector3 position = spec.Position;
         GameObject shell = new GameObject(roomType == RoomType.Garage ? "Mech Garage Hangar" : $"{roomType} Room");
         shell.transform.SetParent(runtimeRoot, false);
         shell.transform.position = position;
 
-        Vector2 roomSize = GetHubRoomSize(roomType);
-        float roomWidth = roomSize.x;
-        float roomDepth = roomSize.y;
-        float sideDirection = position.x < 0f ? -1f : 1f;
-        float outerWallX = position.x + sideDirection * roomWidth * 0.5f;
-        float entranceWallX = position.x - sideDirection * roomWidth * 0.5f;
-        float doorWidth = roomType == RoomType.Garage
-            ? 8f
-            : roomType == RoomType.TrainingRoom ? 5.2f : 3.8f;
+        float roomWidth = spec.width;
+        float roomDepth = spec.depth;
+        float roomHeight = spec.height;
+        float sideDirection = spec.side;
+        float outerWallX = spec.OuterWallX;
+        float entranceWallX = spec.EntranceWallX;
+        float doorWidth = spec.doorWidth;
+        float doorHeight = spec.doorHeight;
+        hubRoomSpread = new Vector2(roomWidth / spec.legacySize.x, roomDepth / spec.legacySize.y);
+        hubRoomHeight = roomHeight;
         Color floorColor = new Color(0.14f, 0.16f, 0.17f);
         Color wallColor = Color.Lerp(new Color(0.22f, 0.24f, 0.26f), accentColor, 0.08f);
         Color ceilingColor = new Color(0.105f, 0.125f, 0.14f);
-        float wallY = position.y + LairRoomHeight * 0.5f;
+        float wallY = position.y + roomHeight * 0.5f;
 
         CreateBlock(
             $"{roomType} Finished Floor",
@@ -4724,19 +4960,19 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateBlock(
             $"{roomType} Outer Wall",
             new Vector3(outerWallX, wallY, position.z),
-            new Vector3(0.32f, LairRoomHeight, roomDepth),
+            new Vector3(0.32f, roomHeight, roomDepth),
             wallColor,
             shell.transform);
         CreateBlock(
             $"{roomType} North Wall",
-            position + new Vector3(0f, LairRoomHeight * 0.5f, roomDepth * 0.5f),
-            new Vector3(roomWidth, LairRoomHeight, 0.32f),
+            position + new Vector3(0f, roomHeight * 0.5f, roomDepth * 0.5f),
+            new Vector3(roomWidth, roomHeight, 0.32f),
             wallColor,
             shell.transform);
         CreateBlock(
             $"{roomType} South Wall",
-            position + new Vector3(0f, LairRoomHeight * 0.5f, -roomDepth * 0.5f),
-            new Vector3(roomWidth, LairRoomHeight, 0.32f),
+            position + new Vector3(0f, roomHeight * 0.5f, -roomDepth * 0.5f),
+            new Vector3(roomWidth, roomHeight, 0.32f),
             wallColor,
             shell.transform);
         CreateVerticalDoorWall(
@@ -4745,14 +4981,15 @@ public class PrototypeSceneBuilder : MonoBehaviour
             position.z,
             roomDepth,
             wallY,
-            LairRoomHeight,
+            roomHeight,
             position.z,
             doorWidth,
             wallColor,
-            shell.transform);
+            shell.transform,
+            doorHeight);
         CreateBlock(
             $"{roomType} Finished Ceiling",
-            position + new Vector3(0f, LairRoomHeight - 0.05f, 0f),
+            position + new Vector3(0f, roomHeight - 0.05f, 0f),
             new Vector3(roomWidth, 0.18f, roomDepth),
             ceilingColor,
             shell.transform);
@@ -4762,29 +4999,31 @@ public class PrototypeSceneBuilder : MonoBehaviour
             position,
             roomWidth,
             roomDepth,
+            roomHeight,
             entranceWallX,
             outerWallX,
             sideDirection,
             doorWidth,
+            doorHeight,
             accentColor,
             shell.transform);
 
         float frameX = entranceWallX - sideDirection * 0.18f;
         CreateDecorationBlock(
             $"{roomType} Door Frame South",
-            new Vector3(frameX, position.y + 1.9f, position.z - doorWidth * 0.5f),
-            new Vector3(0.18f, 3.8f, 0.24f),
+            new Vector3(frameX, position.y + doorHeight * 0.5f, position.z - doorWidth * 0.5f),
+            new Vector3(0.18f, doorHeight, 0.24f),
             accentColor,
             shell.transform);
         CreateDecorationBlock(
             $"{roomType} Door Frame North",
-            new Vector3(frameX, position.y + 1.9f, position.z + doorWidth * 0.5f),
-            new Vector3(0.18f, 3.8f, 0.24f),
+            new Vector3(frameX, position.y + doorHeight * 0.5f, position.z + doorWidth * 0.5f),
+            new Vector3(0.18f, doorHeight, 0.24f),
             accentColor,
             shell.transform);
         CreateDecorationBlock(
             $"{roomType} Door Frame Header",
-            new Vector3(frameX, position.y + 3.8f, position.z),
+            new Vector3(frameX, position.y + doorHeight, position.z),
             new Vector3(0.18f, 0.24f, doorWidth),
             accentColor,
             shell.transform);
@@ -4809,24 +5048,32 @@ public class PrototypeSceneBuilder : MonoBehaviour
             position,
             roomWidth,
             roomDepth,
+            roomHeight,
             entranceWallX,
             outerWallX,
             sideDirection,
             doorWidth,
             accentColor,
             shell.transform);
-        float roomLightRange = roomType == RoomType.Garage || roomType == RoomType.TrainingRoom ? 13f : 9f;
-        CreateFacilityCeilingLight(
-            $"{roomType} Interior Light A",
-            position + new Vector3(0f, LairRoomHeight - 0.38f, -roomDepth * 0.22f),
+        CreateLargeRoomStructure(
+            roomType,
+            position,
+            roomWidth,
+            roomDepth,
+            roomHeight,
+            entranceWallX,
+            outerWallX,
+            sideDirection,
+            doorWidth,
             accentColor,
-            roomLightRange,
             shell.transform);
-        CreateFacilityCeilingLight(
-            $"{roomType} Interior Light B",
-            position + new Vector3(0f, LairRoomHeight - 0.38f, roomDepth * 0.22f),
+        CreateRoomLightingGrid(
+            $"{roomType}",
+            position,
+            roomWidth,
+            roomDepth,
+            roomHeight,
             accentColor,
-            roomLightRange,
             shell.transform);
 
         GameObject contentRoot = new GameObject($"{roomType} Constructed Contents");
@@ -4844,7 +5091,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             GameObject loadoutTerminal = CreateLairModel(
                 "Models/Lair/ArmoryRack",
                 "Armory Loadout Rack",
-                position + new Vector3(0f, 0f, 1.15f),
+                position + Spread(new Vector3(0f, 0f, 1.15f)),
                 Quaternion.identity,
                 Vector3.one,
                 levelVisuals[0].transform);
@@ -4854,22 +5101,22 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
         else if (roomType == RoomType.ResearchLab)
         {
-            CreateResearchStation("Tranquilizer Research", position + new Vector3(-1.8f, 0.55f, -1.1f), ResearchTrack.Tranquilizers, accentColor, levelVisuals[0].transform);
-            CreateResearchStation("Armor Research", position + new Vector3(0f, 0.55f, -1.1f), ResearchTrack.Armor, new Color(0.78f, 0.8f, 0.84f), levelVisuals[0].transform);
-            CreateResearchStation("Weapons Research", position + new Vector3(1.8f, 0.55f, -1.1f), ResearchTrack.Weapons, new Color(0.9f, 0.42f, 0.18f), levelVisuals[0].transform);
+            CreateResearchStation("Tranquilizer Research", position + Spread(new Vector3(-1.8f, 0.55f, -1.1f)), ResearchTrack.Tranquilizers, accentColor, levelVisuals[0].transform);
+            CreateResearchStation("Armor Research", position + Spread(new Vector3(0f, 0.55f, -1.1f)), ResearchTrack.Armor, new Color(0.78f, 0.8f, 0.84f), levelVisuals[0].transform);
+            CreateResearchStation("Weapons Research", position + Spread(new Vector3(1.8f, 0.55f, -1.1f)), ResearchTrack.Weapons, new Color(0.9f, 0.42f, 0.18f), levelVisuals[0].transform);
         }
         else if (roomType == RoomType.OperativeCustomization)
         {
             GameObject customization = CreateLairModel(
                 "Models/Lair/CustomizationStation",
                 "Operative Customization Station",
-                position + new Vector3(0f, 0f, 0.5f),
+                position + Spread(new Vector3(0f, 0f, 0.5f)),
                 Quaternion.identity,
                 Vector3.one,
                 levelVisuals[0].transform);
             AddInteractionCollider(customization, new Vector3(3f, 3.1f, 2.2f), new Vector3(0f, 1.5f, 0f));
             customization.AddComponent<OperativeCustomizationTerminal>();
-            CreateLairModel("Models/Lair/CustomizationStation", "Secondary Wardrobe", position + new Vector3(-2.15f, 0f, 1.15f), Quaternion.Euler(0f, 18f, 0f), Vector3.one * 0.8f, levelVisuals[2].transform);
+            CreateLairModel("Models/Lair/CustomizationStation", "Secondary Wardrobe", position + Spread(new Vector3(-2.15f, 0f, 1.15f)), Quaternion.Euler(0f, 18f, 0f), Vector3.one * 0.8f, levelVisuals[2].transform);
         }
         else if (roomType == RoomType.Garage)
         {
@@ -4877,13 +5124,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
         else if (roomType == RoomType.MedicalBay)
         {
-            CreateLairModel("Models/Lair/MedicalPod", "Medical Recovery Pod", position + new Vector3(0f, 0f, 0.8f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, levelVisuals[0].transform);
-            CreateLairModel("Models/Lair/MedicalPod", "Advanced Medical Pod", position + new Vector3(-1.7f, 0f, 0.5f), Quaternion.Euler(0f, 180f, 0f), Vector3.one * 0.85f, levelVisuals[2].transform);
+            CreateLairModel("Models/Lair/MedicalPod", "Medical Recovery Pod", position + Spread(new Vector3(0f, 0f, 0.8f)), Quaternion.Euler(0f, 180f, 0f), Vector3.one, levelVisuals[0].transform);
+            CreateLairModel("Models/Lair/MedicalPod", "Advanced Medical Pod", position + Spread(new Vector3(-1.7f, 0f, 0.5f)), Quaternion.Euler(0f, 180f, 0f), Vector3.one * 0.85f, levelVisuals[2].transform);
         }
         else if (roomType == RoomType.IntelCenter)
         {
-            CreateLairModel("Models/Lair/IntelConsole", "Intelligence Analysis Console", position + new Vector3(0f, 0f, 0.8f), Quaternion.identity, Vector3.one, levelVisuals[0].transform);
-            CreateLairModel("Models/Lair/IntelConsole", "Strategic Analysis Console", position + new Vector3(-1.6f, 0f, -0.8f), Quaternion.Euler(0f, 18f, 0f), Vector3.one * 0.8f, levelVisuals[2].transform);
+            CreateLairModel("Models/Lair/IntelConsole", "Intelligence Analysis Console", position + Spread(new Vector3(0f, 0f, 0.8f)), Quaternion.identity, Vector3.one, levelVisuals[0].transform);
+            CreateLairModel("Models/Lair/IntelConsole", "Strategic Analysis Console", position + Spread(new Vector3(-1.6f, 0f, -0.8f)), Quaternion.Euler(0f, 18f, 0f), Vector3.one * 0.8f, levelVisuals[2].transform);
         }
         else if (roomType == RoomType.TrainingRoom)
         {
@@ -4900,7 +5147,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
             levelVisuals);
 
         float terminalX = entranceWallX + sideDirection * 1.15f;
-        float terminalZ = position.z - roomDepth * 0.5f + 1.15f;
+        // Keep the upgrade console beside the doorway so it is easy to find in the larger rooms.
+        float terminalZ = Mathf.Max(position.z - roomDepth * 0.5f + 1.15f, position.z - doorWidth * 0.5f - 1.4f);
         float terminalYaw = sideDirection < 0f ? 90f : -90f;
         GameObject terminal = CreateEnvironmentModel(
             "LabConsole_A",
@@ -4930,11 +5178,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         CreateWorldLabel(
             FormatRoomName(roomType),
-            new Vector3(frameX, position.y + 4.28f, position.z),
+            new Vector3(frameX, position.y + doorHeight + 0.48f, position.z),
             Color.white,
             roomType == RoomType.OperativeCustomization ? 0.12f : 0.15f,
             shell.transform);
         SecretLairManager.Instance?.RegisterRoomVisual(roomType, contentRoot, levelVisuals);
+        hubRoomSpread = Vector2.one;
+        hubRoomHeight = LairRoomHeight;
     }
 
     private void CreateHubRoomArchitecture(
@@ -4942,10 +5192,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Vector3 position,
         float roomWidth,
         float roomDepth,
+        float roomHeight,
         float entranceWallX,
         float outerWallX,
         float sideDirection,
         float doorWidth,
+        float doorHeight,
         Color accentColor,
         Transform parent)
     {
@@ -4956,11 +5208,11 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Vector3 shellScale = roomType == RoomType.Garage
             ? new Vector3(
                 roomDepth / 13f,
-                LairRoomHeight / 6.2f,
+                roomHeight / 6.2f,
                 roomWidth / 10f)
             : new Vector3(
                 roomDepth / 10f,
-                LairRoomHeight / 4.2f,
+                roomHeight / 4.2f,
                 roomWidth / 8f);
 
         GameObject modeledShell = CreateEnvironmentModel(
@@ -4983,7 +5235,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             Quaternion.Euler(0f, roomYaw, 0f),
             new Vector3(
                 Mathf.Min(roomDepth - 0.8f, doorWidth * 2.12f) / 8f,
-                LairRoomHeight / 4.2f,
+                Mathf.Min(roomHeight, doorHeight + 1.2f) / 4.2f,
                 1f),
             accentColor,
             parent);
@@ -5024,29 +5276,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
                     position.z),
                 Quaternion.Euler(0f, roomYaw, 0f),
                 new Vector3(
-                    Mathf.Min(roomDepth - 1.5f, 10f) / 10f,
-                    LairRoomHeight / 5.2f,
+                    Mathf.Min(roomDepth - 1.5f, 16f) / 10f,
+                    Mathf.Min(roomHeight - 1f, 7f) / 5.23f,
                     1f),
                 accentColor,
                 parent);
             DisableChildColliders(serviceDoor);
-        }
-    }
-
-    private static Vector2 GetHubRoomSize(RoomType roomType)
-    {
-        switch (roomType)
-        {
-            case RoomType.Garage:
-                return new Vector2(15f, 18f);
-            case RoomType.TrainingRoom:
-                return new Vector2(14f, 17f);
-            case RoomType.OperativeCustomization:
-                return new Vector2(11f, 11f);
-            case RoomType.MedicalBay:
-                return new Vector2(10f, 11f);
-            default:
-                return new Vector2(10f, 11f);
         }
     }
 
@@ -5102,7 +5337,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         for (int bay = -1; bay <= 1; bay++)
         {
-            float bayZ = position.z + bay * 5.1f;
+            float bayZ = position.z + bay * 5.1f * hubRoomSpread.y;
             CreateDecorationBlock(
                 $"Mech Service Berth {bay + 2} Centerline",
                 new Vector3(position.x, position.y + 0.1f, bayZ),
@@ -5129,6 +5364,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Vector3 position,
         float roomWidth,
         float roomDepth,
+        float roomHeight,
         float entranceWallX,
         float outerWallX,
         float sideDirection,
@@ -5146,8 +5382,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
             accentColor,
             parent);
 
-        int floorTilesX = Mathf.Clamp(Mathf.CeilToInt(roomWidth / 4f), 2, 4);
-        int floorTilesZ = Mathf.Clamp(Mathf.CeilToInt(roomDepth / 4f), 2, 5);
+        int floorTilesX = Mathf.Clamp(Mathf.CeilToInt(roomWidth / 5f), 2, 8);
+        int floorTilesZ = Mathf.Clamp(Mathf.CeilToInt(roomDepth / 5f), 2, 10);
         float tileWidth = (roomWidth - 0.65f) / floorTilesX;
         float tileDepth = (roomDepth - 0.65f) / floorTilesZ;
         for (int x = 0; x < floorTilesX; x++)
@@ -5169,7 +5405,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             }
         }
 
-        int outerPanelCount = Mathf.Clamp(Mathf.RoundToInt(roomDepth / 4f), 2, 5);
+        int outerPanelCount = Mathf.Clamp(Mathf.RoundToInt(roomDepth / 4f), 2, 12);
         float outerPanelSpacing = (roomDepth - 0.8f) / outerPanelCount;
         for (int panel = 0; panel < outerPanelCount; panel++)
         {
@@ -5184,7 +5420,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 parent);
         }
 
-        int endPanelCount = Mathf.Clamp(Mathf.RoundToInt(roomWidth / 4f), 2, 4);
+        int endPanelCount = Mathf.Clamp(Mathf.RoundToInt(roomWidth / 4f), 2, 10);
         float endPanelSpacing = (roomWidth - 0.8f) / endPanelCount;
         for (int panel = 0; panel < endPanelCount; panel++)
         {
@@ -5212,7 +5448,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             $"{roomType} Ventilation Unit",
             new Vector3(
                 position.x + sideDirection * roomWidth * 0.22f,
-                position.y + 2.8f,
+                position.y + Mathf.Max(2.8f, roomHeight * 0.62f),
                 position.z + roomDepth * 0.5f - 0.24f),
             Quaternion.Euler(0f, 180f, 0f),
             Vector3.one,
@@ -5257,34 +5493,260 @@ public class PrototypeSceneBuilder : MonoBehaviour
             parent);
     }
 
+    // Evenly spaced ceiling lights sized to the room, replacing the fixed pair
+    // of lights the small rooms used.
+    private void CreateRoomLightingGrid(
+        string roomName,
+        Vector3 position,
+        float roomWidth,
+        float roomDepth,
+        float roomHeight,
+        Color accentColor,
+        Transform parent)
+    {
+        const float targetSpacing = 11f;
+        int countX = Mathf.Max(1, Mathf.RoundToInt(roomWidth / targetSpacing));
+        int countZ = Mathf.Max(1, Mathf.RoundToInt(roomDepth / targetSpacing));
+        float cellWidth = roomWidth / countX;
+        float cellDepth = roomDepth / countZ;
+        float range = Mathf.Max(10f, Mathf.Max(cellWidth, cellDepth) * 1.1f + roomHeight * 0.6f);
+        int index = 0;
+        for (int x = 0; x < countX; x++)
+        {
+            for (int z = 0; z < countZ; z++)
+            {
+                Vector3 lightPosition = new Vector3(
+                    position.x - roomWidth * 0.5f + cellWidth * (x + 0.5f),
+                    position.y + roomHeight - 0.38f,
+                    position.z - roomDepth * 0.5f + cellDepth * (z + 0.5f));
+                CreateFacilityCeilingLight(
+                    $"{roomName} Interior Light {++index}",
+                    lightPosition,
+                    accentColor,
+                    range,
+                    parent);
+            }
+        }
+    }
+
+    // Structural dressing that keeps the larger rooms from reading as empty
+    // boxes: ceiling beams, wall pilasters, and (for the hangar) an overhead
+    // gantry, a mezzanine catwalk, and service equipment along the walls.
+    private void CreateLargeRoomStructure(
+        RoomType roomType,
+        Vector3 position,
+        float roomWidth,
+        float roomDepth,
+        float roomHeight,
+        float entranceWallX,
+        float outerWallX,
+        float sideDirection,
+        float doorWidth,
+        Color accentColor,
+        Transform parent)
+    {
+        Color beamColor = new Color(0.13f, 0.15f, 0.165f);
+        Color hazardColor = new Color(0.92f, 0.68f, 0.12f);
+
+        // Ceiling beams spanning the room width.
+        int beamCount = Mathf.Max(1, Mathf.FloorToInt(roomDepth / 6f));
+        for (int beam = 1; beam < beamCount; beam++)
+        {
+            float z = position.z - roomDepth * 0.5f + roomDepth * beam / beamCount;
+            CreateDecorationBlock(
+                $"{roomType} Ceiling Beam {beam}",
+                new Vector3(position.x, position.y + roomHeight - 0.42f, z),
+                new Vector3(roomWidth - 0.4f, 0.5f, 0.35f),
+                beamColor,
+                parent);
+        }
+
+        // Pilasters along the north, south, and outer walls.
+        float columnScaleY = roomHeight / 3.34f;
+        int endColumns = Mathf.Max(1, Mathf.FloorToInt(roomWidth / 6f));
+        for (int column = 1; column < endColumns; column++)
+        {
+            float x = entranceWallX + sideDirection * roomWidth * column / endColumns;
+            for (int end = -1; end <= 1; end += 2)
+            {
+                GameObject pilaster = CreateEnvironmentModel(
+                    "SupportColumn_A",
+                    $"{roomType} {(end < 0 ? "South" : "North")} Pilaster {column}",
+                    new Vector3(x, position.y, position.z + end * (roomDepth * 0.5f - 0.55f)),
+                    Quaternion.identity,
+                    new Vector3(0.9f, columnScaleY, 0.9f),
+                    accentColor,
+                    parent);
+                DisableChildColliders(pilaster);
+            }
+        }
+
+        int sideColumns = Mathf.Max(1, Mathf.FloorToInt(roomDepth / 6f));
+        for (int column = 1; column < sideColumns; column++)
+        {
+            float z = position.z - roomDepth * 0.5f + roomDepth * column / sideColumns;
+            GameObject pilaster = CreateEnvironmentModel(
+                "SupportColumn_A",
+                $"{roomType} Outer Pilaster {column}",
+                new Vector3(outerWallX - sideDirection * 0.55f, position.y, z),
+                Quaternion.identity,
+                new Vector3(0.9f, columnScaleY, 0.9f),
+                accentColor,
+                parent);
+            DisableChildColliders(pilaster);
+        }
+
+        if (roomType != RoomType.Garage) return;
+
+        float doorwayYaw = sideDirection < 0f ? 90f : -90f;
+
+        // Overhead gantry crane: two rails running the length of the hangar and
+        // a bridge beam with a hoist block.
+        float railY = position.y + roomHeight - 1.3f;
+        for (int rail = -1; rail <= 1; rail += 2)
+        {
+            CreateDecorationBlock(
+                $"Hangar Gantry Rail {(rail < 0 ? "A" : "B")}",
+                new Vector3(position.x + rail * roomWidth * 0.3f, railY, position.z),
+                new Vector3(0.45f, 0.6f, roomDepth - 1.2f),
+                beamColor,
+                parent);
+        }
+
+        float bridgeZ = position.z - roomDepth * 0.12f;
+        CreateDecorationBlock(
+            "Hangar Gantry Bridge",
+            new Vector3(position.x, railY - 0.55f, bridgeZ),
+            new Vector3(roomWidth * 0.6f + 0.8f, 0.7f, 0.9f),
+            hazardColor,
+            parent);
+        CreateDecorationBlock(
+            "Hangar Gantry Hoist",
+            new Vector3(position.x + sideDirection * roomWidth * 0.08f, railY - 1.3f, bridgeZ),
+            new Vector3(1.1f, 0.9f, 1.1f),
+            beamColor,
+            parent);
+        CreateDecorationBlock(
+            "Hangar Gantry Cable",
+            new Vector3(position.x + sideDirection * roomWidth * 0.08f, railY - 2.6f, bridgeZ),
+            new Vector3(0.06f, 1.7f, 0.06f),
+            new Color(0.08f, 0.08f, 0.09f),
+            parent);
+
+        // Mezzanine catwalk along the outer wall.
+        float catwalkY = position.y + Mathf.Min(4.4f, roomHeight * 0.5f);
+        float catwalkX = outerWallX - sideDirection * 1.35f;
+        int catwalkSections = Mathf.Max(1, Mathf.FloorToInt((roomDepth - 2f) / 6f));
+        float catwalkStart = position.z - catwalkSections * 3f;
+        for (int section = 0; section < catwalkSections; section++)
+        {
+            float z = catwalkStart + section * 6f + 3f;
+            // Leave the rear service shutter clear.
+            if (Mathf.Abs(z - position.z) < Mathf.Min(roomDepth - 1.5f, 16f) * 0.5f + 1.5f) continue;
+            GameObject catwalk = CreateEnvironmentModel(
+                "CatwalkSection_A",
+                $"Hangar Mezzanine Catwalk {section + 1}",
+                new Vector3(catwalkX, catwalkY, z),
+                Quaternion.Euler(0f, 90f, 0f),
+                Vector3.one,
+                accentColor,
+                parent);
+            DisableChildColliders(catwalk);
+            GameObject railing = CreateEnvironmentModel(
+                "SafetyRailing_A",
+                $"Hangar Mezzanine Railing {section + 1}",
+                new Vector3(catwalkX - sideDirection * 1.15f, catwalkY + 0.1f, z),
+                Quaternion.Euler(0f, 90f, 0f),
+                new Vector3(1.5f, 1f, 1f),
+                accentColor,
+                parent);
+            DisableChildColliders(railing);
+        }
+
+        // Hazard striping across the entrance and around the service berths.
+        CreateDecorationBlock(
+            "Hangar Entrance Hazard Stripe",
+            new Vector3(entranceWallX + sideDirection * 1.4f, position.y + 0.1f, position.z),
+            new Vector3(0.5f, 0.04f, doorWidth),
+            hazardColor,
+            parent);
+        CreateDecorationBlock(
+            "Hangar Berth Boundary North",
+            new Vector3(position.x, position.y + 0.1f, position.z + roomDepth * 0.38f),
+            new Vector3(roomWidth * 0.62f, 0.04f, 0.35f),
+            hazardColor,
+            parent);
+        CreateDecorationBlock(
+            "Hangar Berth Boundary South",
+            new Vector3(position.x, position.y + 0.1f, position.z - roomDepth * 0.38f),
+            new Vector3(roomWidth * 0.62f, 0.04f, 0.35f),
+            hazardColor,
+            parent);
+
+        // Service equipment lining the north and south walls.
+        float wallInsetZ = roomDepth * 0.5f - 1.6f;
+        for (int slot = 0; slot < 4; slot++)
+        {
+            float x = entranceWallX + sideDirection * (4f + slot * (roomWidth - 8f) / 3f);
+            CreateFacilityProp(
+                slot % 2 == 0 ? "Models/Facility/CargoCrate" : "Models/Facility/Generator",
+                $"Hangar North Service Equipment {slot + 1}",
+                new Vector3(x, position.y, position.z + wallInsetZ),
+                new Vector3(0f, 180f, 0f),
+                Vector3.one,
+                slot % 2 == 0 ? new Vector3(1.35f, 1.3f, 1.2f) : new Vector3(2.2f, 2.1f, 1.4f),
+                slot % 2 == 0 ? new Vector3(0f, 0.65f, 0f) : new Vector3(0f, 1.05f, 0f),
+                parent);
+            CreateFacilityProp(
+                slot % 2 == 0 ? "Models/Facility/FabricationBench" : "Models/Facility/CargoCrate",
+                $"Hangar South Service Equipment {slot + 1}",
+                new Vector3(x, position.y, position.z - wallInsetZ),
+                Vector3.zero,
+                Vector3.one,
+                slot % 2 == 0 ? new Vector3(2.6f, 1.5f, 1.25f) : new Vector3(1.35f, 1.3f, 1.2f),
+                slot % 2 == 0 ? new Vector3(0f, 0.75f, 0f) : new Vector3(0f, 0.65f, 0f),
+                parent);
+        }
+
+        GameObject toolWall = CreateEnvironmentModel(
+            "WeaponRack_A",
+            "Hangar Tool Wall",
+            new Vector3(outerWallX - sideDirection * 0.45f, position.y, position.z + roomDepth * 0.3f),
+            Quaternion.Euler(0f, doorwayYaw, 0f),
+            Vector3.one * 1.2f,
+            accentColor,
+            parent);
+        DisableChildColliders(toolWall);
+    }
+
     private void CreateGarageInterior(Vector3 position, float sideDirection, GameObject[] levelVisuals)
     {
         CreateLairModel(
             "Models/Lair/HangarMech",
             "Scout Mech",
-            position + new Vector3(sideDirection * 0.8f, 0f, 0f),
+            position + Spread(new Vector3(sideDirection * 0.8f, 0f, 0f)),
             Quaternion.Euler(0f, 180f, 0f),
-            Vector3.one * 0.78f,
+            Vector3.one * 0.78f * HangarMechScale,
             levelVisuals[0].transform);
         CreateLairModel(
             "Models/Lair/HangarMech",
             "Assault Mech",
-            position + new Vector3(sideDirection * 0.8f, 0f, 5.1f),
+            position + Spread(new Vector3(sideDirection * 0.8f, 0f, 5.1f)),
             Quaternion.Euler(0f, 180f, 0f),
-            Vector3.one * 0.86f,
+            Vector3.one * 0.86f * HangarMechScale,
             levelVisuals[2].transform);
         CreateLairModel(
             "Models/Lair/HangarMech",
             "Aegis Mech",
-            position + new Vector3(sideDirection * 0.8f, 0f, -5.1f),
+            position + Spread(new Vector3(sideDirection * 0.8f, 0f, -5.1f)),
             Quaternion.Euler(0f, 180f, 0f),
-            Vector3.one * 0.94f,
+            Vector3.one * 0.94f * HangarMechScale,
             levelVisuals[4].transform);
 
         CreateFacilityProp(
             "Models/Facility/FabricationBench",
             "Garage Fabrication Bench",
-            position + new Vector3(sideDirection * 5.6f, 0f, 6.7f),
+            position + Spread(new Vector3(sideDirection * 5.6f, 0f, 6.7f)),
             new Vector3(0f, sideDirection < 0f ? 90f : -90f, 0f),
             Vector3.one,
             new Vector3(2.6f, 1.5f, 1.25f),
@@ -5293,7 +5755,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateFacilityProp(
             "Models/Facility/CargoCrate",
             "Garage Parts Crate",
-            position + new Vector3(sideDirection * 5.7f, 0f, -6.8f),
+            position + Spread(new Vector3(sideDirection * 5.7f, 0f, -6.8f)),
             new Vector3(0f, 90f, 0f),
             Vector3.one,
             new Vector3(1.35f, 1.3f, 1.2f),
@@ -5302,7 +5764,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateFacilityProp(
             "Models/Facility/Generator",
             "Garage Heavy Power Unit",
-            position + new Vector3(sideDirection * 5.3f, 0f, -4.9f),
+            position + Spread(new Vector3(sideDirection * 5.3f, 0f, -4.9f)),
             new Vector3(0f, sideDirection < 0f ? 90f : -90f, 0f),
             Vector3.one,
             new Vector3(2.2f, 2.1f, 1.4f),
@@ -5320,7 +5782,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         GameObject[] levelVisuals)
     {
         float wallFacingRotation = sideDirection < 0f ? 90f : -90f;
-        Vector3 outerEquipmentPosition = position + new Vector3(sideDirection * 3.7f, 0f, 0f);
+        Vector3 outerEquipmentPosition = position + Spread(new Vector3(sideDirection * 3.7f, 0f, 0f));
 
         switch (roomType)
         {
@@ -5337,7 +5799,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/CargoCrate",
                     "Armory Ammunition Case",
-                    position + new Vector3(sideDirection * 3.6f, 0f, -3.8f),
+                    position + Spread(new Vector3(sideDirection * 3.6f, 0f, -3.8f)),
                     Vector3.zero,
                     Vector3.one,
                     new Vector3(1.35f, 1.3f, 1.2f),
@@ -5348,7 +5810,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/ServerRack",
                     "Research Data Server",
-                    position + new Vector3(sideDirection * 3.7f, 0f, -3.6f),
+                    position + Spread(new Vector3(sideDirection * 3.7f, 0f, -3.6f)),
                     new Vector3(0f, wallFacingRotation, 0f),
                     Vector3.one,
                     new Vector3(1.1f, 2.8f, 1.1f),
@@ -5357,7 +5819,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/LaboratoryTank",
                     "Research Specimen Tank",
-                    position + new Vector3(sideDirection * 3.6f, 0f, 3.5f),
+                    position + Spread(new Vector3(sideDirection * 3.6f, 0f, 3.5f)),
                     Vector3.zero,
                     Vector3.one,
                     new Vector3(1.6f, 3f, 1.6f),
@@ -5379,7 +5841,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/ServerRack",
                     "Medical Diagnostic Server",
-                    position + new Vector3(sideDirection * 3.7f, 0f, -3.4f),
+                    position + Spread(new Vector3(sideDirection * 3.7f, 0f, -3.4f)),
                     new Vector3(0f, wallFacingRotation, 0f),
                     Vector3.one,
                     new Vector3(1.1f, 2.8f, 1.1f),
@@ -5388,7 +5850,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/LaboratoryTank",
                     "Medical Regeneration Chamber",
-                    position + new Vector3(sideDirection * 3.6f, 0f, 3.3f),
+                    position + Spread(new Vector3(sideDirection * 3.6f, 0f, 3.3f)),
                     Vector3.zero,
                     Vector3.one,
                     new Vector3(1.6f, 3f, 1.6f),
@@ -5399,7 +5861,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/ServerRack",
                     "Intel Server Array A",
-                    position + new Vector3(sideDirection * 3.7f, 0f, -2.8f),
+                    position + Spread(new Vector3(sideDirection * 3.7f, 0f, -2.8f)),
                     new Vector3(0f, wallFacingRotation, 0f),
                     Vector3.one,
                     new Vector3(1.1f, 2.8f, 1.1f),
@@ -5408,7 +5870,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/ServerRack",
                     "Intel Server Array B",
-                    position + new Vector3(sideDirection * 3.7f, 0f, 2.8f),
+                    position + Spread(new Vector3(sideDirection * 3.7f, 0f, 2.8f)),
                     new Vector3(0f, wallFacingRotation, 0f),
                     Vector3.one,
                     new Vector3(1.1f, 2.8f, 1.1f),
@@ -5419,7 +5881,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 CreateFacilityProp(
                     "Models/Facility/CargoCrate",
                     "Training Weighted Supply Case",
-                    position + new Vector3(sideDirection * 5f, 0f, -6.1f),
+                    position + Spread(new Vector3(sideDirection * 5f, 0f, -6.1f)),
                     Vector3.zero,
                     Vector3.one,
                     new Vector3(1.35f, 1.3f, 1.2f),
@@ -5449,8 +5911,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Color accentColor,
         GameObject[] levelVisuals)
     {
-        float sideInset = Mathf.Min(roomWidth * 0.32f, roomType == RoomType.Garage ? 5.2f : 3.8f);
-        float depthInset = Mathf.Min(roomDepth * 0.3f, roomType == RoomType.Garage ? 5.8f : 3.6f);
+        float sideInset = Mathf.Min(roomWidth * 0.32f, (roomType == RoomType.Garage ? 5.2f : 3.8f) * hubRoomSpread.x);
+        float depthInset = Mathf.Min(roomDepth * 0.3f, (roomType == RoomType.Garage ? 5.8f : 3.6f) * hubRoomSpread.y);
         float equipmentX = position.x + sideDirection * sideInset;
 
         CreateRoomUpgradeProp(
@@ -5513,7 +5975,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             stageFourAsset,
             $"{roomType} Stage 4 Advanced System",
             new Vector3(
-                position.x - sideDirection * Mathf.Min(roomWidth * 0.2f, 2.6f),
+                position.x - sideDirection * Mathf.Min(roomWidth * 0.2f, 2.6f * hubRoomSpread.x),
                 position.y,
                 position.z + depthInset),
             Quaternion.Euler(0f, -wallFacingRotation, 0f),
@@ -5540,9 +6002,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
         DisableChildColliders(finalWallSystem);
         CreateFacilityCeilingLight(
             $"{roomType} Stage 5 High Output Lighting",
-            position + new Vector3(0f, LairRoomHeight - 0.34f, 0f),
+            position + new Vector3(0f, hubRoomHeight - 0.34f, 0f),
             Color.Lerp(accentColor, Color.white, 0.18f),
-            roomType == RoomType.Garage || roomType == RoomType.TrainingRoom ? 15f : 11f,
+            Mathf.Max(roomType == RoomType.Garage || roomType == RoomType.TrainingRoom ? 15f : 11f, hubRoomHeight * 2.2f),
             levelVisuals[4].transform);
     }
 
@@ -5568,53 +6030,89 @@ public class PrototypeSceneBuilder : MonoBehaviour
         EnsureBoxCollider(prop, colliderSize, colliderCenter);
     }
 
+    private static LairRoomSpec GetRecruitQuartersSpec()
+    {
+        foreach (LairRoomSpec spec in LairRoomSpecs)
+        {
+            if (spec.isRecruitQuarters) return spec;
+        }
+
+        return Room(RoomType.IntelCenter, 1f, LairCommandY + 0.2f, 17f, 24f, 28f, 7.5f, 4.4f, 4f, 11f, 13f, true);
+    }
+
     private void CreateRecruitQuarters()
     {
-        Vector3 position = new Vector3(14f, LairCommandY, 10f);
+        LairRoomSpec spec = GetRecruitQuartersSpec();
+        Vector3 position = spec.Position;
         Color accent = new Color(0.22f, 0.55f, 0.62f);
-        const float roomWidth = 11f;
-        const float roomDepth = 13f;
-        const float doorWidth = 4f;
-        float entranceWallX = position.x - roomWidth * 0.5f;
-        float outerWallX = position.x + roomWidth * 0.5f;
+        float roomWidth = spec.width;
+        float roomDepth = spec.depth;
+        float roomHeight = spec.height;
+        float doorWidth = spec.doorWidth;
+        float doorHeight = spec.doorHeight;
+        float side = spec.side;
+        float entranceWallX = spec.EntranceWallX;
+        float outerWallX = spec.OuterWallX;
         Color wallColor = new Color(0.22f, 0.25f, 0.27f);
+        hubRoomSpread = new Vector2(roomWidth / spec.legacySize.x, roomDepth / spec.legacySize.y);
 
         GameObject quarters = new GameObject("Recruit Quarters Room");
         quarters.transform.SetParent(runtimeRoot, false);
         quarters.transform.position = position;
 
         CreateBlock("Recruit Quarters Finished Floor", position + new Vector3(0f, 0.02f, 0f), new Vector3(roomWidth, 0.12f, roomDepth), new Color(0.15f, 0.17f, 0.18f), quarters.transform);
-        CreateBlock("Recruit Quarters Outer Wall", new Vector3(outerWallX, position.y + LairRoomHeight * 0.5f, position.z), new Vector3(0.32f, LairRoomHeight, roomDepth), wallColor, quarters.transform);
-        CreateBlock("Recruit Quarters North Wall", position + new Vector3(0f, LairRoomHeight * 0.5f, roomDepth * 0.5f), new Vector3(roomWidth, LairRoomHeight, 0.32f), wallColor, quarters.transform);
-        CreateBlock("Recruit Quarters South Wall", position + new Vector3(0f, LairRoomHeight * 0.5f, -roomDepth * 0.5f), new Vector3(roomWidth, LairRoomHeight, 0.32f), wallColor, quarters.transform);
+        CreateBlock("Recruit Quarters Outer Wall", new Vector3(outerWallX, position.y + roomHeight * 0.5f, position.z), new Vector3(0.32f, roomHeight, roomDepth), wallColor, quarters.transform);
+        CreateBlock("Recruit Quarters North Wall", position + new Vector3(0f, roomHeight * 0.5f, roomDepth * 0.5f), new Vector3(roomWidth, roomHeight, 0.32f), wallColor, quarters.transform);
+        CreateBlock("Recruit Quarters South Wall", position + new Vector3(0f, roomHeight * 0.5f, -roomDepth * 0.5f), new Vector3(roomWidth, roomHeight, 0.32f), wallColor, quarters.transform);
         CreateVerticalDoorWall(
             "Recruit Quarters Atrium Entrance",
             entranceWallX,
             position.z,
             roomDepth,
-            position.y + LairRoomHeight * 0.5f,
-            LairRoomHeight,
+            position.y + roomHeight * 0.5f,
+            roomHeight,
             position.z,
             doorWidth,
             wallColor,
-            quarters.transform);
-        CreateBlock("Recruit Quarters Finished Ceiling", position + new Vector3(0f, LairRoomHeight - 0.05f, 0f), new Vector3(roomWidth, 0.18f, roomDepth), new Color(0.105f, 0.125f, 0.14f), quarters.transform);
+            quarters.transform,
+            doorHeight);
+        CreateBlock("Recruit Quarters Finished Ceiling", position + new Vector3(0f, roomHeight - 0.05f, 0f), new Vector3(roomWidth, 0.18f, roomDepth), new Color(0.105f, 0.125f, 0.14f), quarters.transform);
 
-        float frameX = entranceWallX - 0.18f;
-        CreateDecorationBlock("Recruit Quarters Door Frame South", new Vector3(frameX, position.y + 1.9f, position.z - doorWidth * 0.5f), new Vector3(0.18f, 3.8f, 0.24f), accent, quarters.transform);
-        CreateDecorationBlock("Recruit Quarters Door Frame North", new Vector3(frameX, position.y + 1.9f, position.z + doorWidth * 0.5f), new Vector3(0.18f, 3.8f, 0.24f), accent, quarters.transform);
-        CreateDecorationBlock("Recruit Quarters Door Frame Header", new Vector3(frameX, position.y + 3.8f, position.z), new Vector3(0.18f, 0.24f, doorWidth), accent, quarters.transform);
+        float frameX = entranceWallX - side * 0.18f;
+        CreateDecorationBlock("Recruit Quarters Door Frame South", new Vector3(frameX, position.y + doorHeight * 0.5f, position.z - doorWidth * 0.5f), new Vector3(0.18f, doorHeight, 0.24f), accent, quarters.transform);
+        CreateDecorationBlock("Recruit Quarters Door Frame North", new Vector3(frameX, position.y + doorHeight * 0.5f, position.z + doorWidth * 0.5f), new Vector3(0.18f, doorHeight, 0.24f), accent, quarters.transform);
+        CreateDecorationBlock("Recruit Quarters Door Frame Header", new Vector3(frameX, position.y + doorHeight, position.z), new Vector3(0.18f, 0.24f, doorWidth), accent, quarters.transform);
         CreateDecorationBlock("Recruit Quarters Threshold", new Vector3(entranceWallX, position.y + 0.08f, position.z), new Vector3(1.1f, 0.06f, doorWidth - 0.35f), accent, quarters.transform);
         CreateDecorationBlock("Recruit Quarters North Wall Trim", position + new Vector3(0f, 1.05f, roomDepth * 0.5f - 0.18f), new Vector3(roomWidth - 0.5f, 0.14f, 0.08f), accent, quarters.transform);
         CreateDecorationBlock("Recruit Quarters South Wall Trim", position + new Vector3(0f, 1.05f, -roomDepth * 0.5f + 0.18f), new Vector3(roomWidth - 0.5f, 0.14f, 0.08f), accent, quarters.transform);
 
-        CreateLairModel("Models/Lair/RecruitBunk", "Recruit Bunk A", position + new Vector3(-2.8f, 0f, 3.6f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, quarters.transform);
-        CreateLairModel("Models/Lair/RecruitBunk", "Recruit Bunk B", position + new Vector3(0f, 0f, 3.6f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, quarters.transform);
-        CreateLairModel("Models/Lair/RecruitBunk", "Recruit Bunk C", position + new Vector3(2.8f, 0f, 3.6f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, quarters.transform);
-        CreateBlock("Recruit Quarters Lounge Bench", position + new Vector3(3.8f, 0.45f, -3.8f), new Vector3(1.2f, 0.9f, 3.1f), new Color(0.16f, 0.2f, 0.22f), quarters.transform);
-        CreateFacilityCeilingLight("Recruit Quarters Light A", position + new Vector3(0f, LairRoomHeight - 0.38f, -2.7f), accent, 9f, quarters.transform);
-        CreateFacilityCeilingLight("Recruit Quarters Light B", position + new Vector3(0f, LairRoomHeight - 0.38f, 2.7f), accent, 9f, quarters.transform);
-        CreateWorldLabel("RECRUIT QUARTERS", new Vector3(frameX, position.y + 4.28f, position.z), Color.white, 0.14f, quarters.transform);
+        // Two rows of bunks along the north and south walls, with a lounge in the middle.
+        int bunksPerRow = Mathf.Clamp(Mathf.FloorToInt((roomWidth - 4f) / 3f), 3, 7);
+        float bunkSpacing = (roomWidth - 4f) / bunksPerRow;
+        for (int row = -1; row <= 1; row += 2)
+        {
+            for (int bunk = 0; bunk < bunksPerRow; bunk++)
+            {
+                float x = entranceWallX + side * (3f + bunkSpacing * (bunk + 0.5f));
+                CreateLairModel(
+                    "Models/Lair/RecruitBunk",
+                    $"Recruit Bunk {(row < 0 ? "S" : "N")}{bunk + 1}",
+                    new Vector3(x, position.y, position.z + row * (roomDepth * 0.5f - 1.6f)),
+                    Quaternion.Euler(0f, row > 0 ? 180f : 0f, 0f),
+                    Vector3.one,
+                    quarters.transform);
+            }
+        }
+
+        CreateBlock("Recruit Quarters Lounge Bench A", position + new Vector3(side * 2f, 0.45f, -2.2f), new Vector3(3.4f, 0.9f, 1.1f), new Color(0.16f, 0.2f, 0.22f), quarters.transform);
+        CreateBlock("Recruit Quarters Lounge Bench B", position + new Vector3(side * 2f, 0.45f, 2.2f), new Vector3(3.4f, 0.9f, 1.1f), new Color(0.16f, 0.2f, 0.22f), quarters.transform);
+        CreateEnvironmentModel("BriefingTable_A", "Recruit Quarters Lounge Table", position + new Vector3(side * 2f, 0f, 0f), Quaternion.identity, Vector3.one * 0.8f, accent, quarters.transform);
+        CreateEnvironmentModel("LockerBank_A", "Recruit Quarters Lockers", new Vector3(outerWallX - side * 0.6f, position.y, position.z), Quaternion.Euler(0f, side < 0f ? 90f : -90f, 0f), Vector3.one, accent, quarters.transform);
+
+        CreateLargeRoomStructure(RoomType.IntelCenter, position, roomWidth, roomDepth, roomHeight, entranceWallX, outerWallX, side, doorWidth, accent, quarters.transform);
+        CreateRoomLightingGrid("Recruit Quarters", position, roomWidth, roomDepth, roomHeight, accent, quarters.transform);
+        CreateWorldLabel("RECRUIT QUARTERS", new Vector3(frameX, position.y + doorHeight + 0.48f, position.z), Color.white, 0.14f, quarters.transform);
+        hubRoomSpread = Vector2.one;
     }
 
     private void CreateHubRecruitResidents()
@@ -5622,12 +6120,18 @@ public class PrototypeSceneBuilder : MonoBehaviour
         RecruitRoster roster = RecruitRoster.Instance;
         if (roster == null || roster.recruits.Count == 0) return;
 
+        LairRoomSpec quarters = GetRecruitQuartersSpec();
+        Vector3 lounge = quarters.Position + new Vector3(quarters.side * 2f, 0f, 0f);
+
         for (int i = 0; i < roster.recruits.Count; i++)
         {
             RecruitedOperativeData recruit = roster.recruits[i];
             GameObject resident = new GameObject($"Hub Recruit - {recruit.displayName}");
             resident.transform.SetParent(runtimeRoot, false);
-            resident.transform.position = new Vector3(11.5f + i % 3 * 1.7f, LairCommandY + 0.05f, 8f + i / 3 * 1.8f);
+            resident.transform.position = new Vector3(
+                lounge.x - 3.4f + i % 5 * 1.7f,
+                quarters.floorY + 0.05f,
+                lounge.z - 4.5f + i / 5 * 1.8f);
 
             GameObject visual = TryCreateCharacterVisual(resident.transform, recruit.visualResourcePath);
             if (visual == null)
@@ -5636,7 +6140,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             }
 
             HubRecruitAgent agent = resident.AddComponent<HubRecruitAgent>();
-            agent.wanderRadius = 2.25f;
+            agent.wanderRadius = 4f;
             CreateWorldLabel(recruit.displayName.ToUpperInvariant(), resident.transform.position + Vector3.up * 2.35f, Color.white, 0.11f, resident.transform);
         }
     }
@@ -5969,17 +6473,17 @@ public class PrototypeSceneBuilder : MonoBehaviour
     {
         for (int lane = 0; lane < 3; lane++)
         {
-            float x = position.x - 3.5f + lane * 3.5f;
+            float x = position.x + (-3.5f + lane * 3.5f) * hubRoomSpread.x;
             CreateBlock(
                 $"Training Lane {lane + 1}",
                 new Vector3(x, position.y + 0.08f, position.z),
-                new Vector3(0.12f, 0.04f, 11f),
+                new Vector3(0.12f, 0.04f, 11f * hubRoomSpread.y),
                 accentColor,
                 levelVisuals[0].transform);
             GameObject target = CreateEnvironmentModel(
                 "TrainingTarget_A",
                 $"Training Target {lane + 1}",
-                new Vector3(x, position.y, position.z + 4.7f),
+                new Vector3(x, position.y, position.z + 4.7f * hubRoomSpread.y),
                 Quaternion.Euler(0f, 180f, 0f),
                 Vector3.one * 0.8f,
                 accentColor,
@@ -5990,17 +6494,17 @@ public class PrototypeSceneBuilder : MonoBehaviour
             }
         }
 
-        CreateBlock("Training Cover Low", position + new Vector3(-2.5f, 0.55f, -1.4f), new Vector3(2.2f, 1.1f, 0.6f), new Color(0.18f, 0.2f, 0.22f), levelVisuals[1].transform);
-        CreateBlock("Training Cover High", position + new Vector3(2.5f, 1f, 0.2f), new Vector3(2.2f, 2f, 0.6f), new Color(0.18f, 0.2f, 0.22f), levelVisuals[2].transform);
-        CreateBlock("Training Balance Beam", position + new Vector3(0f, 0.45f, -3.4f), new Vector3(5f, 0.3f, 0.45f), accentColor, levelVisuals[3].transform);
+        CreateBlock("Training Cover Low", position + Spread(new Vector3(-2.5f, 0.55f, -1.4f)), new Vector3(2.2f, 1.1f, 0.6f), new Color(0.18f, 0.2f, 0.22f), levelVisuals[1].transform);
+        CreateBlock("Training Cover High", position + Spread(new Vector3(2.5f, 1f, 0.2f)), new Vector3(2.2f, 2f, 0.6f), new Color(0.18f, 0.2f, 0.22f), levelVisuals[2].transform);
+        CreateBlock("Training Balance Beam", position + Spread(new Vector3(0f, 0.45f, -3.4f)), new Vector3(5f, 0.3f, 0.45f), accentColor, levelVisuals[3].transform);
         CreateLairModel(
             "Models/Lair/TrainingRig",
             "Advanced Combat Rig",
-            position + new Vector3(0f, 0f, -4.8f),
+            position + Spread(new Vector3(0f, 0f, -4.8f)),
             Quaternion.identity,
             Vector3.one,
             levelVisuals[4].transform);
-        CreateWorldLabel("FIRING LANES  /  COMBAT SIMULATION", position + new Vector3(0f, 2.55f, -6.5f), Color.white, 0.1f);
+        CreateWorldLabel("FIRING LANES  /  COMBAT SIMULATION", position + Spread(new Vector3(0f, 2.55f, -6.5f)), Color.white, 0.1f);
     }
 
     private void CreateArmoryDisplays(Vector3 position, GameObject[] levelVisuals)
@@ -6015,7 +6519,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             if (weapon == null) continue;
             bool unlocked = lair != null && lair.IsWeaponUnlocked(weapon.weaponId);
             int displayLevel = unlocked ? 0 : Mathf.Clamp(weapon.unlockedAtArmoryLevel - 1, 0, levelVisuals.Length - 1);
-            Vector3 displayPosition = position + new Vector3(-2.25f + i * 1.5f, 1.3f, 2.1f);
+            Vector3 displayPosition = position + Spread(new Vector3(-2.25f + i * 1.5f, 1.3f, 2.1f));
             Color color = unlocked ? GetWeaponColor(weapon.weaponClass) : new Color(0.14f, 0.15f, 0.16f);
             GameObject display = CreateBlock(
                 $"Armory Display - {weapon.weaponName}",
