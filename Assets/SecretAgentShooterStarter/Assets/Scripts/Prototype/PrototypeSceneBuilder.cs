@@ -4722,22 +4722,119 @@ public class PrototypeSceneBuilder : MonoBehaviour
             CreateGlazedOpening("Facade", window, facadeZ, accentColor);
         }
 
-        // Glass sliding doors at the main entrance.
-        SlidingSecurityDoor entranceDoor = CreateSlidingSecurityDoor(
-            "Main Entrance Glass Door",
-            new Vector3(0f, (entrance.yMin + entrance.yMax) * 0.5f + 0.25f, facadeZ),
-            Quaternion.identity,
-            entrance.width,
-            entrance.height - 0.5f,
-            new Color(0.6f, 0.75f, 0.8f),
-            accentColor);
-        entranceDoor.closeDelay = 1.5f;
-        foreach (Transform panel in new[] { entranceDoor.leftPanel, entranceDoor.rightPanel })
+        CreateEntranceStorefront(entrance, facadeZ, accentColor);
+    }
+
+    // Automatic glass entrance in the style of a commercial sliding door
+    // system: an aluminium frame filling the opening, a door-operator header,
+    // glass transom panes above it, fixed glass side panels, and a pair of
+    // framed glass doors in the middle that slide open behind the side panels.
+    private void CreateEntranceStorefront(Rect opening, float wallZ, Color accentColor)
+    {
+        Color aluminium = new Color(0.72f, 0.75f, 0.78f);
+        Color dark = new Color(0.08f, 0.09f, 0.1f);
+        GameObject root = new GameObject("Main Entrance Storefront");
+        root.transform.SetParent(runtimeRoot, false);
+        Transform parent = root.transform;
+
+        float floorY = 0f;
+        float headerBottom = 3f;
+        float headerTop = 3.45f;
+        float halfWidth = opening.width * 0.5f;
+        float centerX = (opening.xMin + opening.xMax) * 0.5f;
+        const float leafWidth = 2f;
+        const float frameDepth = 0.14f;
+
+        // Perimeter frame and door-operator header.
+        for (int side = -1; side <= 1; side += 2)
         {
-            if (panel == null) continue;
-            panel.name = panel.name.Replace("Panel", "Defense Glass Panel");
-            ApplyGlassMaterial(panel.gameObject);
+            CreateBlock($"Entrance Frame Jamb Post {side}", new Vector3(centerX + side * (halfWidth - 0.06f), (floorY + opening.yMax) * 0.5f, wallZ), new Vector3(0.12f, opening.yMax - floorY, frameDepth), aluminium, parent);
         }
+
+        CreateBlock("Entrance Door Operator Header Rail", new Vector3(centerX, (headerBottom + headerTop) * 0.5f, wallZ + 0.05f), new Vector3(opening.width, headerTop - headerBottom, 0.36f), aluminium, parent);
+        CreateDecorationBlock("Entrance Frame Top Rail", new Vector3(centerX, opening.yMax - 0.06f, wallZ), new Vector3(opening.width, 0.12f, frameDepth), aluminium, parent);
+        CreateDecorationBlock("Entrance Floor Track Rail", new Vector3(centerX, floorY + 0.01f, wallZ + 0.12f), new Vector3(opening.width, 0.03f, 0.3f), dark, parent);
+        CreateDecorationBlock("Entrance Motion Sensor Post", new Vector3(centerX, headerBottom - 0.08f, wallZ + 0.24f), new Vector3(0.45f, 0.12f, 0.12f), dark, parent);
+        CreateDecorationBlock("Entrance Motion Sensor Light", new Vector3(centerX, headerBottom - 0.14f, wallZ + 0.24f), new Vector3(0.12f, 0.02f, 0.06f), accentColor, parent);
+
+        // Transom glazing above the header, divided by mullions.
+        float transomHeight = opening.yMax - 0.12f - headerTop;
+        GameObject transom = CreateBlock("Entrance Transom Defense Glass", new Vector3(centerX, headerTop + transomHeight * 0.5f, wallZ), new Vector3(opening.width - 0.24f, transomHeight, 0.04f), aluminium, parent);
+        ApplyGlassMaterial(transom);
+        for (int i = 1; i < 4; i++)
+        {
+            float x = opening.xMin + opening.width * i / 4f;
+            CreateDecorationBlock($"Entrance Transom Mullion Post {i}", new Vector3(x, headerTop + transomHeight * 0.5f, wallZ), new Vector3(0.08f, transomHeight, frameDepth), aluminium, parent);
+        }
+
+        // Fixed glass side panels either side of the sliding doors.
+        float sideWidth = halfWidth - 0.12f - leafWidth;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            float x = centerX + side * (leafWidth + sideWidth * 0.5f);
+            GameObject sideLite = CreateBlock($"Entrance Side Defense Glass {side}", new Vector3(x, (floorY + headerBottom) * 0.5f, wallZ), new Vector3(sideWidth, headerBottom - floorY, 0.04f), aluminium, parent);
+            ApplyGlassMaterial(sideLite);
+            CreateDecorationBlock($"Entrance Side Mid Rail {side}", new Vector3(x, floorY + 1f, wallZ), new Vector3(sideWidth, 0.08f, frameDepth), aluminium, parent);
+            CreateDecorationBlock($"Entrance Side Bottom Rail {side}", new Vector3(x, floorY + 0.06f, wallZ), new Vector3(sideWidth, 0.12f, frameDepth), aluminium, parent);
+            CreateDecorationBlock($"Entrance Meeting Post {side}", new Vector3(centerX + side * leafWidth, (floorY + headerBottom) * 0.5f, wallZ), new Vector3(0.1f, headerBottom - floorY, frameDepth), aluminium, parent);
+        }
+
+        // The sliding doors: run on the inside face and slide behind the side panels.
+        float leafZ = wallZ + 0.16f;
+        GameObject doorRoot = new GameObject("Main Entrance Sliding Doors");
+        doorRoot.transform.SetParent(parent, false);
+        doorRoot.transform.position = new Vector3(centerX, floorY, leafZ);
+        BoxCollider trigger = doorRoot.AddComponent<BoxCollider>();
+        trigger.isTrigger = true;
+        trigger.center = new Vector3(0f, 1.5f, 0f);
+        trigger.size = new Vector3(leafWidth * 2f + 2f, 3f, 7f);
+        Rigidbody body = doorRoot.AddComponent<Rigidbody>();
+        body.isKinematic = true;
+        body.useGravity = false;
+
+        Transform leftLeaf = CreateSlidingGlassLeaf("Left", doorRoot.transform, -leafWidth * 0.5f, leafWidth, headerBottom - floorY - 0.02f, aluminium, 1f);
+        Transform rightLeaf = CreateSlidingGlassLeaf("Right", doorRoot.transform, leafWidth * 0.5f, leafWidth, headerBottom - floorY - 0.02f, aluminium, -1f);
+
+        SlidingSecurityDoor door = doorRoot.AddComponent<SlidingSecurityDoor>();
+        door.slideSpeed = 2.6f;
+        door.closeDelay = 1.5f;
+        door.Initialize(leftLeaf, rightLeaf, leafWidth - 0.05f);
+
+        // Entrance mats on both sides.
+        CreateDecorationBlock("Entrance Floor Mat Inside", new Vector3(centerX, 0.0f, wallZ + 1.6f), new Vector3(leafWidth * 2f, 0.02f, 2f), new Color(0.06f, 0.07f, 0.08f), parent);
+        CreateDecorationBlock("Entrance Floor Mat Outside", new Vector3(centerX, 0.0f, wallZ - 1.4f), new Vector3(leafWidth * 2f, 0.02f, 1.6f), new Color(0.06f, 0.07f, 0.08f), parent);
+    }
+
+    // One framed glass door leaf: glass, stiles, top/bottom/mid rails, and a
+    // pull handle on the edge where the two doors meet.
+    private Transform CreateSlidingGlassLeaf(string side, Transform doorRoot, float localX, float width, float height, Color frameColor, float handleSide)
+    {
+        GameObject leaf = new GameObject($"Entrance Door Leaf {side}");
+        leaf.transform.SetParent(doorRoot, false);
+        leaf.transform.localPosition = new Vector3(localX, 0f, 0f);
+        Transform t = leaf.transform;
+        Vector3 origin = t.position;
+        const float frame = 0.08f;
+        const float depth = 0.07f;
+
+        GameObject glass = CreateBlock($"Entrance Door {side} Defense Glass", origin + new Vector3(0f, height * 0.5f, 0f), new Vector3(width - frame, height - frame, 0.03f), frameColor, t);
+        ApplyGlassMaterial(glass);
+        CreateDecorationBlock($"Entrance Door {side} Top Rail", origin + new Vector3(0f, height - frame * 0.5f, 0f), new Vector3(width, frame, depth), frameColor, t);
+        CreateDecorationBlock($"Entrance Door {side} Bottom Rail", origin + new Vector3(0f, 0.08f, 0f), new Vector3(width, 0.16f, depth), frameColor, t);
+        CreateDecorationBlock($"Entrance Door {side} Mid Rail", origin + new Vector3(0f, 1f, 0f), new Vector3(width, 0.07f, depth), frameColor, t);
+        for (int edge = -1; edge <= 1; edge += 2)
+        {
+            CreateDecorationBlock($"Entrance Door {side} Stile Post {edge}", origin + new Vector3(edge * (width * 0.5f - frame * 0.5f), height * 0.5f, 0f), new Vector3(frame, height, depth), frameColor, t);
+        }
+
+        // Pull handles on both faces near the meeting edge.
+        float handleX = handleSide * (width * 0.5f - 0.18f);
+        for (int face = -1; face <= 1; face += 2)
+        {
+            CreateDecorationBlock($"Entrance Door {side} Handle Post {face}", origin + new Vector3(handleX, 1.1f, face * 0.07f), new Vector3(0.035f, 0.7f, 0.035f), new Color(0.85f, 0.87f, 0.9f), t);
+        }
+
+        return t;
     }
 
     // A glass pane in an opening, with a frame, mullions roughly every three
