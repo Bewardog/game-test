@@ -72,7 +72,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
     {
         Room(RoomType.Garage,                 -1f, 0f,                     2.15f, 34f, 53.7f, 9f, 12f,  7f,   15f, 18f, false, true),
         Room(RoomType.MedicalBay,              1f, 0f,                     22f, 24f, 24f, 8.5f, 4.4f, 4f,   10f, 11f),
-        Room(RoomType.IntelCenter,             1f, 0f,                     -8f, 26f, 30f, 7.5f, 5f,   4.2f, 10f, 11f, false, false, true),
+        Room(RoomType.IntelCenter,            -1f, LairCommandY + 0.2f,    19f, 26f, 28f, 7.5f, 5f,   4.2f, 10f, 11f, false, false, true),
         Room(RoomType.Armory,                 -1f, LairOperationsY + 0.2f, -12f, 22f, 23f, 8.5f, 4.4f, 4f,   10f, 11f),
         Room(RoomType.TrainingRoom,           -1f, LairOperationsY + 0.2f, 17f,  30f, 32f, 8.5f, 6f,   4.5f, 14f, 17f),
         Room(RoomType.ResearchLab,             1f, LairOperationsY + 0.2f, -6f,  26f, 30f, 8.5f, 4.4f, 4f,   10f, 11f),
@@ -4705,26 +4705,27 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
     }
 
+    // Floor directories are wall plaques on the elevator shaft beside the
+    // doors. The elevator header already names the floor, so the plaque just
+    // lists where to go.
     private void CreateLairWayfindingDirectories()
     {
-        CreateLairDirectoryPylon(
-            "Ground Logistics Directory",
-            new Vector3(0f, 0f, 20.5f),
-            "G  LOGISTICS",
-            "MISSION OPERATIONS  >  OFF RECEPTION\nMEDICAL BAY  >  NORTH-EAST\nMECH HANGAR  VIA WEST COURTYARD",
-            new Color(0.16f, 0.76f, 0.72f));
-        CreateLairDirectoryPylon(
-            "Operations Directory",
-            new Vector3(-3.3f, LairOperationsY + 0.2f, 26.2f),
-            "2  OPERATIONS",
-            "ARMORY  <     >  RESEARCH LAB\nTRAINING ROOM  WEST",
-            new Color(0.18f, 0.58f, 0.84f));
-        CreateLairDirectoryPylon(
-            "Command Directory",
-            new Vector3(-3.3f, LairCommandY + 0.2f, 26.2f),
-            "3  COMMAND",
-            "CUSTOMIZATION  <     >  INTEL CENTER\nRECRUIT QUARTERS  NORTH",
-            new Color(0.54f, 0.4f, 0.74f));
+        float[] floorY = { 0f, LairOperationsY + 0.2f, LairCommandY + 0.2f };
+        string[] directoryText =
+        {
+            "MEDICAL BAY  >  EAST\nMECH HANGAR  VIA WEST COURTYARD\nMISSION OPERATIONS  LEVEL 3",
+            "ARMORY  <  WEST  >  RESEARCH LAB\nTRAINING ROOM  <  WEST",
+            "CUSTOMIZATION  <  WEST  >  INTEL CENTER\nMISSION OPERATIONS  <  WEST\nRECRUIT QUARTERS  >  EAST"
+        };
+
+        for (int level = 0; level < floorY.Length; level++)
+        {
+            CreateWorldLabel(
+                directoryText[level],
+                new Vector3(-3.45f, floorY[level] + 2.1f, ElevatorShaftFrontZ - 0.1f),
+                new Color(0.86f, 0.94f, 0.96f),
+                0.07f);
+        }
     }
 
     private void CreateLairDirectoryPylon(
@@ -4928,8 +4929,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             new Vector3(0f, 0.045f, receptionCenterZ),
             new Vector3(1.2f, 0.09f, receptionDepth - 1f),
             accentColor);
-        CreateBlock("Reception Bench West", new Vector3(-8.5f, 0.45f, -18f), new Vector3(4.5f, 0.9f, 1.1f), platformColor);
-        CreateBlock("Reception Bench East", new Vector3(8.5f, 0.45f, -18f), new Vector3(4.5f, 0.9f, 1.1f), platformColor);
+        CreateReceptionFurnishings(platformColor, accentColor);
 
         CreateFacilityProp(
             "Models/Facility/ServerRack",
@@ -4966,6 +4966,125 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         CreateWorldLabel("RECEPTION", new Vector3(0f, 5.15f, -23.9f), Color.white, 0.16f);
         CreateWorldLabel("ATRIUM ACCESS", new Vector3(0f, 5.05f, -4.25f), Color.white, 0.13f);
+    }
+
+    // Reception hall furnishings: the front desk on its dais, a security scanner
+    // line inside the entrance, waiting lounges on both sides, planters, wall
+    // screens, and weapon display cases by the atrium doors.
+    private void CreateReceptionFurnishings(Color platformColor, Color accentColor)
+    {
+        GameObject root = new GameObject("Reception Furnishings");
+        root.transform.SetParent(runtimeRoot, false);
+        Transform parent = root.transform;
+        Color holo = new Color(0.25f, 0.9f, 0.95f);
+        const float deskZ = -12.5f;
+
+        // Front desk on a raised dais, with a lit border and a holographic emblem.
+        CreateBlock("Reception Desk Dais", new Vector3(0f, 0.15f, deskZ), new Vector3(8f, 0.3f, 6f), new Color(0.23f, 0.27f, 0.29f), parent);
+        for (int edge = -1; edge <= 1; edge += 2)
+        {
+            CreateDecorationBlock($"Reception Dais Edge Light Long {edge}", new Vector3(0f, 0.31f, deskZ + edge * 2.98f), new Vector3(8f, 0.04f, 0.06f), accentColor, parent);
+            CreateDecorationBlock($"Reception Dais Edge Light Short {edge}", new Vector3(edge * 3.98f, 0.31f, deskZ), new Vector3(0.06f, 0.04f, 6f), accentColor, parent);
+        }
+
+        GameObject desk = CreateEnvironmentModel(
+            "BriefingTable_A",
+            "Reception Front Desk",
+            new Vector3(0f, 0.3f, deskZ),
+            Quaternion.Euler(0f, 180f, 0f),
+            Vector3.one * 1.28f,
+            accentColor,
+            parent);
+        if (desk == null)
+        {
+            desk = CreateBlock("Reception Front Desk Fallback", new Vector3(0f, 1.2f, deskZ), new Vector3(4.8f, 1.8f, 1f), new Color(0.06f, 0.22f, 0.28f), parent);
+        }
+
+        EnsureBoxCollider(desk, new Vector3(4.7f, 1.55f, 2.5f), new Vector3(0f, 0.78f, 0f));
+        CreateDecorationBlock("Reception Emblem Holo Ring", new Vector3(0f, 2.6f, deskZ), new Vector3(1.8f, 0.03f, 1.8f), holo, parent);
+        CreateDecorationBlock("Reception Emblem Holo Core", new Vector3(0f, 2.3f, deskZ), new Vector3(0.05f, 0.6f, 0.05f), holo, parent);
+        CreateDecorationBlock("Reception Emblem Holo Screen", new Vector3(0f, 2.75f, deskZ), new Vector3(0.9f, 0.3f, 0.04f), Color.Lerp(holo, Color.black, 0.3f), parent);
+        CreateWorldLabel("RECEPTION", new Vector3(0f, 4.4f, deskZ), Color.white, 0.2f, parent);
+
+        // Security scanner line just inside the entrance, leaving the centre walkway clear.
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateFacilityProp(
+                "Models/Facility/SecurityCheckpoint",
+                $"Reception Security Scanner {(side < 0 ? "West" : "East")}",
+                new Vector3(side * 3.3f, 0f, -22.4f),
+                Vector3.zero,
+                Vector3.one,
+                new Vector3(2.8f, 2.3f, 1.4f),
+                new Vector3(0f, 1.15f, 0f),
+                parent);
+        }
+
+        CreateDecorationBlock("Reception Scanner Arch Light", new Vector3(0f, 3.4f, -22.4f), new Vector3(3.6f, 0.12f, 0.12f), accentColor, parent);
+
+        // Waiting lounges on both sides of the hall.
+        for (int side = -1; side <= 1; side += 2)
+        {
+            string sideName = side < 0 ? "West" : "East";
+            float loungeX = side * 14f;
+            const float loungeZ = -16f;
+            for (int row = -1; row <= 1; row += 2)
+            {
+                GameObject bench = CreateEnvironmentModel(
+                    "FacilityBench_A",
+                    $"Reception {sideName} Lounge Bench {(row < 0 ? "S" : "N")}",
+                    new Vector3(loungeX, 0f, loungeZ + row * 1.9f),
+                    Quaternion.Euler(0f, row < 0 ? 0f : 180f, 0f),
+                    Vector3.one,
+                    accentColor,
+                    parent);
+                EnsureBoxCollider(bench, new Vector3(3.2f, 0.9f, 0.9f), new Vector3(0f, 0.45f, 0f));
+            }
+
+            CreateBlock($"Reception {sideName} Lounge Low Table Bench", new Vector3(loungeX, 0.22f, loungeZ), new Vector3(1.8f, 0.44f, 1.1f), platformColor, parent);
+            CreateDecorationBlock($"Reception {sideName} Lounge Table Screen", new Vector3(loungeX, 0.45f, loungeZ), new Vector3(1.4f, 0.02f, 0.7f), new Color(0.06f, 0.26f, 0.3f), parent);
+            CreateDecorationBlock($"Reception {sideName} Lounge Floor Inset", new Vector3(loungeX, 0.02f, loungeZ), new Vector3(6f, 0.02f, 6f), new Color(0.07f, 0.09f, 0.1f), parent);
+
+            // Planters in the corners of the hall.
+            float[] planterZ = { -22.5f, -7.5f };
+            foreach (float z in planterZ)
+            {
+                Vector3 planterPosition = new Vector3(side * 19.8f, 0f, z);
+                CreateBlock($"Reception {sideName} Planter Box {z:0}", planterPosition + new Vector3(0f, 0.35f, 0f), new Vector3(1.6f, 0.7f, 1.6f), new Color(0.14f, 0.16f, 0.17f), parent);
+                CreateDecorationBlock($"Reception {sideName} Planter Grass {z:0}", planterPosition + new Vector3(0f, 0.71f, 0f), new Vector3(1.45f, 0.02f, 1.45f), new Color(0.2f, 0.36f, 0.18f), parent);
+                GameObject plant = CreateEnvironmentModel(
+                    "PineTree_A",
+                    $"Reception {sideName} Planter Plant {z:0}",
+                    planterPosition + new Vector3(0f, 0.7f, 0f),
+                    Quaternion.Euler(0f, z * 13f, 0f),
+                    Vector3.one * 0.3f,
+                    new Color(0.2f, 0.36f, 0.18f),
+                    parent);
+                DisableChildColliders(plant);
+            }
+
+            // Large wall screen on each side wall.
+            float wallX = side * (LairHalfWidth - 0.34f);
+            CreateDecorationBlock($"Reception {sideName} Wall Screen Frame", new Vector3(wallX + side * 0.02f, 3.3f, -14.5f), new Vector3(0.05f, 2.7f, 7.3f), new Color(0.1f, 0.12f, 0.13f), parent);
+            CreateDecorationBlock($"Reception {sideName} Wall Screen", new Vector3(wallX - side * 0.01f, 3.3f, -14.5f), new Vector3(0.04f, 2.4f, 7f), new Color(0.06f, 0.3f, 0.36f), parent);
+            CreateWorldLabel(
+                side < 0 ? "THE AERIE\nSECURE OPERATIONS" : "WELCOME, AGENT\nALL CONTRACTS: LEVEL 3",
+                new Vector3(wallX - side * 0.12f, 3.3f, -14.5f),
+                Color.white,
+                0.16f,
+                parent);
+
+            // Weapon display cases either side of the atrium doors.
+            CreateFacilityProp(
+                "Models/Facility/ArsenalDisplay",
+                $"Reception {sideName} Display Case",
+                new Vector3(side * 6.9f, 0f, -4.75f),
+                new Vector3(0f, 180f, 0f),
+                Vector3.one,
+                new Vector3(2.7f, 2.6f, 0.8f),
+                new Vector3(0f, 1.3f, 0f),
+                parent);
+        }
     }
 
     // Mission Operations: the room where the player picks a contract. Always
