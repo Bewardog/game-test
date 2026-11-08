@@ -2350,7 +2350,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Vector3 position,
         Color accentColor,
         float range,
-        Transform parent = null)
+        Transform parent = null,
+        float intensity = 1.5f)
     {
         GameObject fixture = CreateEnvironmentModel(
             "CeilingLight_A",
@@ -2377,7 +2378,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         facilityLight.type = LightType.Point;
         facilityLight.color = Color.Lerp(accentColor, Color.white, 0.72f);
         facilityLight.range = range;
-        facilityLight.intensity = 1.5f;
+        facilityLight.intensity = intensity;
         facilityLight.shadows = LightShadows.None;
     }
 
@@ -3966,7 +3967,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             enemy.currentHealth = enemy.MaxHealth;
         }
 
-        CreateWorldLabel($"{rank.ToString().ToUpperInvariant()}  {specialization.ToString().ToUpperInvariant()}", enemyObject.transform.position + Vector3.up * 2.2f, Color.white, 0.09f, enemyObject.transform);
+        CreateWorldLabel($"{rank.ToString().ToUpperInvariant()}  {specialization.ToString().ToUpperInvariant()}", enemyObject.transform.position + Vector3.up * 2.2f, Color.white, 0.09f, enemyObject.transform, true);
         return enemy;
     }
 
@@ -4400,7 +4401,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateDecorationBlock("West Command Light Band", new Vector3(-21.66f, LairCommandY, lairCenterZ), new Vector3(0.08f, 0.28f, lairDepth - 1f), new Color(0.32f, 0.58f, 0.66f));
         CreateDecorationBlock("East Command Light Band", new Vector3(21.66f, LairCommandY, lairCenterZ), new Vector3(0.08f, 0.28f, lairDepth - 1f), new Color(0.32f, 0.58f, 0.66f));
 
-        float[] atriumLightZ = { -15f, 5f, 25f };
+        float[] atriumLightZ = { -15f, -2f, 11f, 24f };
         for (int lightIndex = 0; lightIndex < atriumLightZ.Length; lightIndex++)
         {
             float z = atriumLightZ[lightIndex];
@@ -4408,17 +4409,23 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 $"Ground Atrium Light {lightIndex + 1}",
                 new Vector3(0f, LairOperationsY - 1.15f, z),
                 new Color(0.18f, 0.66f, 0.7f),
-                18f);
+                24f,
+                null,
+                2.6f);
             CreateFacilityCeilingLight(
                 $"Operations Atrium Light {lightIndex + 1}",
                 new Vector3(0f, LairCommandY - 1.15f, z),
                 new Color(0.2f, 0.62f, 0.74f),
-                18f);
+                24f,
+                null,
+                2.6f);
             CreateFacilityCeilingLight(
                 $"Command Atrium Light {lightIndex + 1}",
                 new Vector3(0f, LairRoofY - 0.85f, z),
                 new Color(0.34f, 0.58f, 0.68f),
-                18f);
+                24f,
+                null,
+                2.6f);
         }
 
         CreateBlock("Elevator Shaft", new Vector3(0f, 12.5f, 31f), new Vector3(7f, wallHeight, 4f), shaft);
@@ -6141,7 +6148,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
             HubRecruitAgent agent = resident.AddComponent<HubRecruitAgent>();
             agent.wanderRadius = 4f;
-            CreateWorldLabel(recruit.displayName.ToUpperInvariant(), resident.transform.position + Vector3.up * 2.35f, Color.white, 0.11f, resident.transform);
+            CreateWorldLabel(recruit.displayName.ToUpperInvariant(), resident.transform.position + Vector3.up * 2.35f, Color.white, 0.11f, resident.transform, true);
         }
     }
 
@@ -6169,7 +6176,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         return block;
     }
 
-    private void CreateWorldLabel(string text, Vector3 position, Color color, float characterSize = 0.18f, Transform parent = null)
+    private void CreateWorldLabel(string text, Vector3 position, Color color, float characterSize = 0.18f, Transform parent = null, bool floatingTag = false)
     {
         GameObject labelObject = new GameObject($"{text} Label");
         labelObject.transform.position = position;
@@ -6183,7 +6190,123 @@ public class PrototypeSceneBuilder : MonoBehaviour
         label.alignment = TextAlignment.Center;
         label.characterSize = characterSize * 0.2f;
         label.fontSize = 48;
-        labelObject.AddComponent<WorldSpaceLabelBillboard>();
+
+        if (floatingTag)
+        {
+            // Name tags over characters keep floating and turning toward the camera.
+            labelObject.AddComponent<WorldSpaceLabelBillboard>();
+            return;
+        }
+
+        MountWorldLabel(labelObject, label, characterSize);
+    }
+
+    // Turns a label into a physical sign: mounted flat on a nearby wall with a
+    // backing plate, or, when nothing suitable is close, a two-sided display
+    // panel on a post down to whatever is beneath it.
+    private void MountWorldLabel(GameObject labelObject, TextMesh label, float characterSize)
+    {
+        Vector3 position = labelObject.transform.position;
+        Vector2 textSize = MeasureLabel(labelObject, label, characterSize);
+        float plateWidth = textSize.x + 0.3f;
+        float plateHeight = textSize.y + 0.2f;
+        Color plateColor = new Color(0.045f, 0.06f, 0.07f);
+        Color stripColor = new Color(0.16f, 0.76f, 0.78f);
+
+        Physics.SyncTransforms();
+
+        RaycastHit wallHit = default;
+        bool foundWall = false;
+        Vector3[] directions = { Vector3.forward, Vector3.back, Vector3.left, Vector3.right };
+        foreach (Vector3 direction in directions)
+        {
+            if (!Physics.Raycast(position, direction, out RaycastHit hit, 1.6f, ~0, QueryTriggerInteraction.Ignore)) continue;
+            if (Mathf.Abs(hit.normal.y) > 0.3f) continue;
+
+            Vector3 surfaceSize = hit.collider.bounds.size;
+            float surfaceSpan = Mathf.Abs(hit.normal.x) > Mathf.Abs(hit.normal.z) ? surfaceSize.z : surfaceSize.x;
+            if (surfaceSpan < plateWidth * 0.8f || surfaceSize.y < plateHeight * 0.8f) continue;
+
+            if (!foundWall || hit.distance < wallHit.distance)
+            {
+                wallHit = hit;
+                foundWall = true;
+            }
+        }
+
+        if (foundWall)
+        {
+            Vector3 normal = new Vector3(wallHit.normal.x, 0f, wallHit.normal.z).normalized;
+            labelObject.transform.position = new Vector3(wallHit.point.x, position.y, wallHit.point.z) + normal * 0.07f;
+            labelObject.transform.rotation = Quaternion.LookRotation(-normal, Vector3.up);
+            CreateSignPart(labelObject, "Signage Post Plate", new Vector3(0f, 0f, 0.035f), new Vector3(plateWidth, plateHeight, 0.04f), plateColor);
+            CreateSignPart(labelObject, "Signage Accent Strip", new Vector3(0f, -plateHeight * 0.5f + 0.02f, 0.01f), new Vector3(plateWidth, 0.03f, 0.03f), stripColor);
+            return;
+        }
+
+        // Free-standing: readable from both the south and north sides.
+        CreateSignPart(labelObject, "Signage Post Plate", new Vector3(0f, 0f, 0.035f), new Vector3(plateWidth, plateHeight, 0.04f), plateColor);
+        CreateSignPart(labelObject, "Signage Accent Strip", new Vector3(0f, -plateHeight * 0.5f + 0.02f, 0.035f), new Vector3(plateWidth + 0.02f, 0.03f, 0.06f), stripColor);
+
+        GameObject backText = new GameObject("Back Text");
+        backText.transform.SetParent(labelObject.transform, false);
+        backText.transform.localPosition = new Vector3(0f, 0f, 0.07f);
+        backText.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        TextMesh backLabel = backText.AddComponent<TextMesh>();
+        backLabel.text = label.text;
+        backLabel.color = label.color;
+        backLabel.anchor = label.anchor;
+        backLabel.alignment = label.alignment;
+        backLabel.characterSize = label.characterSize;
+        backLabel.fontSize = label.fontSize;
+
+        Vector3 plateBottom = position + Vector3.down * (plateHeight * 0.5f);
+        if (Physics.Raycast(plateBottom, Vector3.down, out RaycastHit floorHit, 6f, ~0, QueryTriggerInteraction.Ignore)
+            && floorHit.distance > 0.25f)
+        {
+            float postLength = floorHit.distance;
+            CreateSignPart(
+                labelObject,
+                "Signage Post",
+                new Vector3(0f, -plateHeight * 0.5f - postLength * 0.5f, 0.035f),
+                new Vector3(0.09f, postLength, 0.09f),
+                new Color(0.12f, 0.14f, 0.15f));
+        }
+    }
+
+    private void CreateSignPart(GameObject labelObject, string partName, Vector3 localPosition, Vector3 localScale, Color color)
+    {
+        GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        part.name = partName;
+        Collider partCollider = part.GetComponent<Collider>();
+        if (partCollider != null)
+        {
+            // Disable first so later signs built this frame don't raycast against it.
+            partCollider.enabled = false;
+            Destroy(partCollider);
+        }
+        part.transform.SetParent(labelObject.transform, false);
+        part.transform.localPosition = localPosition;
+        part.transform.localRotation = Quaternion.identity;
+        part.transform.localScale = localScale;
+        PrototypeEnvironmentArt.StyleBlock(part, partName, localScale, color);
+    }
+
+    private static Vector2 MeasureLabel(GameObject labelObject, TextMesh label, float characterSize)
+    {
+        MeshRenderer textRenderer = labelObject.GetComponent<MeshRenderer>();
+        if (textRenderer != null)
+        {
+            Vector3 size = textRenderer.bounds.size;
+            if (size.x > 0.01f && size.y > 0.01f) return new Vector2(size.x, size.y);
+        }
+
+        // Fallback estimate if the text mesh has not been generated yet.
+        string[] lines = label.text.Split('\n');
+        int longest = 1;
+        foreach (string line in lines) longest = Mathf.Max(longest, line.Length);
+        float lineHeight = characterSize * 0.96f;
+        return new Vector2(longest * lineHeight * 0.55f, lines.Length * lineHeight);
     }
 
     private static string FormatRoomName(RoomType roomType)
