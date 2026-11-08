@@ -4688,24 +4688,10 @@ public class PrototypeSceneBuilder : MonoBehaviour
     private void CreateLairArchitecturalOverlays(Color accentColor)
     {
         float[] floors = { LairOperationsY, LairCommandY };
-        float[] bridgeZ = { -17f, 26.5f };
-        float[] bridgeScaleZ = { 2.65f, 2f };
         for (int floorIndex = 0; floorIndex < floors.Length; floorIndex++)
         {
             float floorY = floors[floorIndex];
             string floorName = floorIndex == 0 ? "Operations" : "Command";
-            for (int bridgeIndex = 0; bridgeIndex < bridgeZ.Length; bridgeIndex++)
-            {
-                GameObject catwalk = CreateEnvironmentModel(
-                    "CatwalkSection_A",
-                    $"{floorName} {bridgeIndex + 1} Architectural Catwalk",
-                    new Vector3(0f, floorY + 0.2f, bridgeZ[bridgeIndex]),
-                    Quaternion.identity,
-                    new Vector3(1.42f, 1f, bridgeScaleZ[bridgeIndex]),
-                    accentColor);
-                DisableChildColliders(catwalk);
-            }
-
             for (int side = -1; side <= 1; side += 2)
             {
                 GameObject railing = CreateEnvironmentModel(
