@@ -1,0 +1,282 @@
+{
+  "output_directory": "C:\\Users\\piefi\\Documents\\Codex\\2026-07-22\\can\\outputs\\SecretAgentShooterStarter\\Assets\\Resources\\Models\\Environment",
+  "assets": [
+    {
+      "name": "WallPanel_A",
+      "filename": "WallPanel_A.fbx",
+      "vertices": 736,
+      "triangles": 1424
+    },
+    {
+      "name": "FloorPanel_A",
+      "filename": "FloorPanel_A.fbx",
+      "vertices": 1440,
+      "triangles": 2800
+    },
+    {
+      "name": "DoorFrame_A",
+      "filename": "DoorFrame_A.fbx",
+      "vertices": 560,
+      "triangles": 1080
+    },
+    {
+      "name": "SupportColumn_A",
+      "filename": "SupportColumn_A.fbx",
+      "vertices": 280,
+      "triangles": 540
+    },
+    {
+      "name": "CeilingLight_A",
+      "filename": "CeilingLight_A.fbx",
+      "vertices": 168,
+      "triangles": 324
+    },
+    {
+      "name": "VentUnit_A",
+      "filename": "VentUnit_A.fbx",
+      "vertices": 784,
+      "triangles": 1512
+    },
+    {
+      "name": "PipeCluster_A",
+      "filename": "PipeCluster_A.fbx",
+      "vertices": 688,
+      "triangles": 1344
+    },
+    {
+      "name": "RockFormation_A",
+      "filename": "RockFormation_A.fbx",
+      "vertices": 126,
+      "triangles": 240
+    },
+    {
+      "name": "PineTree_A",
+      "filename": "PineTree_A.fbx",
+      "vertices": 212,
+      "triangles": 408
+    },
+    {
+      "name": "CargoContainer_A",
+      "filename": "CargoContainer_A.fbx",
+      "vertices": 1480,
+      "triangles": 2868
+    },
+    {
+      "name": "ServerRack_A",
+      "filename": "ServerRack_A.fbx",
+      "vertices": 1400,
+      "triangles": 2700
+    },
+    {
+      "name": "EmbassyPortal_A",
+      "filename": "EmbassyPortal_A.fbx",
+      "vertices": 504,
+      "triangles": 972
+    },
+    {
+      "name": "RelayAntenna_A",
+      "filename": "RelayAntenna_A.fbx",
+      "vertices": 724,
+      "triangles": 1420
+    },
+    {
+      "name": "SupplyCrate_A",
+      "filename": "SupplyCrate_A.fbx",
+      "vertices": 336,
+      "triangles": 648
+    },
+    {
+      "name": "AmmoBox_A",
+      "filename": "AmmoBox_A.fbx",
+      "vertices": 680,
+      "triangles": 1316
+    },
+    {
+      "name": "FieldMedkit_A",
+      "filename": "FieldMedkit_A.fbx",
+      "vertices": 392,
+      "triangles": 756
+    },
+    {
+      "name": "EncryptedCredit_A",
+      "filename": "EncryptedCredit_A.fbx",
+      "vertices": 744,
+      "triangles": 1452
+    },
+    {
+      "name": "AlarmBeacon_A",
+      "filename": "AlarmBeacon_A.fbx",
+      "vertices": 952,
+      "triangles": 1864
+    },
+    {
+      "name": "IntelDatapad_A",
+      "filename": "IntelDatapad_A.fbx",
+      "vertices": 604,
+      "triangles": 1172
+    },
+    {
+      "name": "PrototypePedestal_A",
+      "filename": "PrototypePedestal_A.fbx",
+      "vertices": 560,
+      "triangles": 1080
+    },
+    {
+      "name": "TrainingTarget_A",
+      "filename": "TrainingTarget_A.fbx",
+      "vertices": 456,
+      "triangles": 892
+    },
+    {
+      "name": "DockCrane_A",
+      "filename": "DockCrane_A.fbx",
+      "vertices": 968,
+      "triangles": 1868
+    },
+    {
+      "name": "GuardBooth_A",
+      "filename": "GuardBooth_A.fbx",
+      "vertices": 672,
+      "triangles": 1296
+    },
+    {
+      "name": "LabConsole_A",
+      "filename": "LabConsole_A.fbx",
+      "vertices": 672,
+      "triangles": 1296
+    },
+    {
+      "name": "CryoCore_A",
+      "filename": "CryoCore_A.fbx",
+      "vertices": 1064,
+      "triangles": 2088
+    },
+    {
+      "name": "EmbassyFountain_A",
+      "filename": "EmbassyFountain_A.fbx",
+      "vertices": 1056,
+      "triangles": 2080
+    },
+    {
+      "name": "ArcticBunker_A",
+      "filename": "ArcticBunker_A.fbx",
+      "vertices": 696,
+      "triangles": 1348
+    },
+    {
+      "name": "SecurityCamera_A",
+      "filename": "SecurityCamera_A.fbx",
+      "vertices": 744,
+      "triangles": 1452
+    },
+    {
+      "name": "AccessPanel_A",
+      "filename": "AccessPanel_A.fbx",
+      "vertices": 784,
+      "triangles": 1512
+    },
+    {
+      "name": "Keycard_A",
+      "filename": "Keycard_A.fbx",
+      "vertices": 448,
+      "triangles": 864
+    },
+    {
+      "name": "OfficeDesk_A",
+      "filename": "OfficeDesk_A.fbx",
+      "vertices": 672,
+      "triangles": 1296
+    },
+    {
+      "name": "LockerBank_A",
+      "filename": "LockerBank_A.fbx",
+      "vertices": 1456,
+      "triangles": 2808
+    },
+    {
+      "name": "FacilityBench_A",
+      "filename": "FacilityBench_A.fbx",
+      "vertices": 448,
+      "triangles": 864
+    },
+    {
+      "name": "WeaponRack_A",
+      "filename": "WeaponRack_A.fbx",
+      "vertices": 1120,
+      "triangles": 2160
+    },
+    {
+      "name": "MedicalStation_A",
+      "filename": "MedicalStation_A.fbx",
+      "vertices": 792,
+      "triangles": 1536
+    },
+    {
+      "name": "BriefingTable_A",
+      "filename": "BriefingTable_A.fbx",
+      "vertices": 504,
+      "triangles": 972
+    },
+    {
+      "name": "StairFlight_A",
+      "filename": "StairFlight_A.fbx",
+      "vertices": 1848,
+      "triangles": 3564
+    },
+    {
+      "name": "CatwalkSection_A",
+      "filename": "CatwalkSection_A.fbx",
+      "vertices": 1120,
+      "triangles": 2160
+    },
+    {
+      "name": "SafetyRailing_A",
+      "filename": "SafetyRailing_A.fbx",
+      "vertices": 504,
+      "triangles": 972
+    },
+    {
+      "name": "ElevatorFront_A",
+      "filename": "ElevatorFront_A.fbx",
+      "vertices": 544,
+      "triangles": 1052
+    },
+    {
+      "name": "GarageDoor_A",
+      "filename": "GarageDoor_A.fbx",
+      "vertices": 976,
+      "triangles": 1888
+    },
+    {
+      "name": "RoofServiceCluster_A",
+      "filename": "RoofServiceCluster_A.fbx",
+      "vertices": 856,
+      "triangles": 1668
+    },
+    {
+      "name": "RoomBulkhead_A",
+      "filename": "RoomBulkhead_A.fbx",
+      "vertices": 728,
+      "triangles": 1404
+    },
+    {
+      "name": "WindowFacade_A",
+      "filename": "WindowFacade_A.fbx",
+      "vertices": 560,
+      "triangles": 1080
+    },
+    {
+      "name": "FacilityRoomShell_A",
+      "filename": "FacilityRoomShell_A.fbx",
+      "vertices": 784,
+      "triangles": 1512
+    },
+    {
+      "name": "MechServiceBay_A",
+      "filename": "MechServiceBay_A.fbx",
+      "vertices": 1528,
+      "triangles": 2948
+    }
+  ],
+  "blend_file": "C:\\Users\\piefi\\Documents\\Codex\\2026-07-22\\can\\outputs\\environment_source\\SecretAgentEnvironmentKit.blend"
+}
