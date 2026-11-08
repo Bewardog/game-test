@@ -247,6 +247,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateRecruitQuarters();
         CreateHubRecruitResidents();
         PrototypeEnvironmentArt.FinalizeHub(runtimeRoot);
+        runtimeRoot.gameObject.AddComponent<DayNightCycle>();
 
         Debug.Log("Secret lair hub built. Use the central mission terminal to deploy.");
     }
@@ -5053,10 +5054,15 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 parent);
             if (tree == null) break;
             DisableChildColliders(tree);
-            CapsuleCollider trunk = tree.AddComponent<CapsuleCollider>();
-            trunk.center = new Vector3(0f, 2f, 0f);
-            trunk.radius = 0.4f;
-            trunk.height = 4f;
+            StandModelUpright(tree, new Vector3(x, -0.1f, z));
+            // Trunk collider as an upright child, independent of the model's own axes.
+            GameObject trunkObject = new GameObject("Trunk Collider");
+            trunkObject.transform.SetParent(tree.transform, true);
+            trunkObject.transform.position = new Vector3(x, 1.9f, z);
+            trunkObject.transform.rotation = Quaternion.identity;
+            CapsuleCollider trunk = trunkObject.AddComponent<CapsuleCollider>();
+            trunk.radius = 0.4f / Mathf.Max(0.01f, trunkObject.transform.lossyScale.x);
+            trunk.height = 4f / Mathf.Max(0.01f, trunkObject.transform.lossyScale.y);
             treesPlaced++;
         }
 
@@ -5078,6 +5084,57 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 parent);
             rocksPlaced++;
         }
+    }
+
+    // Makes sure a tall model (like a tree) is standing: if its tallest
+    // dimension isn't vertical, tip it up onto its base. Also freezes any
+    // physics body on it so nothing can topple it.
+    private static void StandModelUpright(GameObject model, Vector3 groundPoint)
+    {
+        if (model == null) return;
+        foreach (Rigidbody body in model.GetComponentsInChildren<Rigidbody>(true))
+        {
+            body.isKinematic = true;
+            body.useGravity = false;
+        }
+
+        Bounds bounds = GetRendererBounds(model);
+        if (bounds.size == Vector3.zero) return;
+        if (bounds.size.y >= bounds.size.x && bounds.size.y >= bounds.size.z) return;
+
+        // Try tipping about X and about Z both ways; keep the one that stands
+        // tallest with the base on the ground.
+        Quaternion original = model.transform.rotation;
+        Quaternion best = original;
+        float bestHeight = bounds.size.y;
+        Vector3[] axes = { Vector3.right, Vector3.forward };
+        foreach (Vector3 axis in axes)
+        {
+            for (int sign = -1; sign <= 1; sign += 2)
+            {
+                model.transform.rotation = Quaternion.AngleAxis(sign * 90f, axis) * original;
+                Bounds tipped = GetRendererBounds(model);
+                bool baseDown = Mathf.Abs(tipped.min.y - model.transform.position.y) < tipped.size.y * 0.25f;
+                if (baseDown && tipped.size.y > bestHeight)
+                {
+                    bestHeight = tipped.size.y;
+                    best = model.transform.rotation;
+                }
+            }
+        }
+
+        model.transform.rotation = best;
+        Bounds final = GetRendererBounds(model);
+        model.transform.position += Vector3.up * (groundPoint.y - final.min.y);
+    }
+
+    private static Bounds GetRendererBounds(GameObject model)
+    {
+        Renderer[] renderers = model.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0) return new Bounds(model.transform.position, Vector3.zero);
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        return bounds;
     }
 
     private static bool IsExteriorClearZone(float x, float z, float margin)
