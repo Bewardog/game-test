@@ -19,6 +19,9 @@ public class DayNightCycle : MonoBehaviour
 
     public bool paused;
 
+    [Tooltip("Fog thickness. The grounds run on into the fog, so this sets how far you can see.")]
+    public float fogDensity = 0.006f;
+
     private static readonly Color DaySun = new Color(1f, 0.95f, 0.86f);
     private static readonly Color SunsetSun = new Color(1f, 0.55f, 0.3f);
     private static readonly Color MoonLight = new Color(0.45f, 0.55f, 0.82f);
@@ -58,6 +61,8 @@ public class DayNightCycle : MonoBehaviour
 
         sky = RenderSettings.skybox;
         RenderSettings.ambientMode = AmbientMode.Trilight;
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.ExponentialSquared;
         Apply(true);
     }
 
@@ -99,6 +104,7 @@ public class DayNightCycle : MonoBehaviour
             SunsetFog * 0.6f,
             horizonGlow * 0.4f);
         RenderSettings.ambientGroundColor = Color.Lerp(NightAmbientGround, DayAmbientGround, daylight);
+        RenderSettings.fogDensity = fogDensity;
         RenderSettings.fogColor = Color.Lerp(Color.Lerp(NightFog, DayFog, daylight), SunsetFog, horizonGlow * 0.6f);
 
         if (sky != null)

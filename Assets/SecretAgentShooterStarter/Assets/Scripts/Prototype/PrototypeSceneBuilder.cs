@@ -4956,13 +4956,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
         glassRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
-    // Grounds around the lair: ground everywhere (no more falling into the
-    // void), an access road from the courtyard gate to a perimeter checkpoint,
-    // forest and rocks, and a perimeter wall that bounds the playable area.
-    // The existing distant ridges and skyline sit just beyond it.
-    private const float ExteriorBoundaryX = 118f;
-    private const float ExteriorBoundarySouthZ = -128f;
-    private const float ExteriorBoundaryNorthZ = 118f;
+    // Grounds around the lair: open country that runs on into the fog in every
+    // direction. There is no visible boundary; an invisible limit around the
+    // base (PlayAreaBoundary) stops the player wandering off, while enemies can
+    // come from beyond it. Spawn markers for attack waves sit just past it.
+    private const float LairPlayAreaRadius = 220f;
+    private const float LairDefenseSpawnRadius = 255f;
+    private static readonly Vector3 LairGroundsCenter = new Vector3(0f, 0f, -20f);
 
     private void CreateLairExteriorGrounds()
     {
@@ -4970,14 +4970,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
         root.transform.SetParent(runtimeRoot, false);
         Transform parent = root.transform;
         Color grass = new Color(0.12f, 0.2f, 0.11f);
-        Color wallColor = new Color(0.22f, 0.23f, 0.22f);
 
-        // Ground: extends past the perimeter wall out to the ridges.
-        CreateBlock("Exterior Grass Ground", new Vector3(0f, -0.6f, -5f), new Vector3(320f, 1f, 320f), grass, parent);
+        // Ground that reaches far past the fog line, so it reads as endless.
+        CreateBlock("Exterior Grass Ground", new Vector3(0f, -0.6f, -20f), new Vector3(4000f, 1f, 4000f), grass, parent);
 
-        // Access road from the courtyard gate south to the perimeter checkpoint.
+        // Access road from the courtyard gate running south into the distance.
         float roadStart = -70.5f;
-        float roadEnd = ExteriorBoundarySouthZ + 1f;
+        float roadEnd = -1500f;
         float roadLength = roadStart - roadEnd;
         float roadCenter = (roadStart + roadEnd) * 0.5f;
         CreateDecorationBlock("Exterior Access Road", new Vector3(0f, -0.095f, roadCenter), new Vector3(10f, 0.03f, roadLength), new Color(0.1f, 0.1f, 0.11f), parent);
@@ -4986,39 +4985,20 @@ public class PrototypeSceneBuilder : MonoBehaviour
             CreateDecorationBlock($"Exterior Road Edge Line {edge}", new Vector3(edge * 4.6f, -0.075f, roadCenter), new Vector3(0.15f, 0.01f, roadLength), new Color(0.75f, 0.72f, 0.6f), parent);
         }
 
-        for (float z = roadStart - 6f; z > roadEnd + 4f; z -= 9f)
+        for (float z = roadStart - 6f; z > -400f; z -= 9f)
         {
             CreateDecorationBlock($"Exterior Road Center Dash {z:0}", new Vector3(0f, -0.075f, z), new Vector3(0.18f, 0.01f, 4f), new Color(0.8f, 0.7f, 0.3f), parent);
         }
 
-        float[] lampZ = { -82f, -102f, -122f };
+        float[] lampZ = { -82f, -112f, -142f, -172f };
         foreach (float z in lampZ)
         {
             CreateFacilityLamp($"Exterior Road Lamp W {z:0}", new Vector3(-6.5f, 0f, z));
-            CreateFacilityLamp($"Exterior Road Lamp E {z:0}", new Vector3(6.5f, 0f, z - 10f));
+            CreateFacilityLamp($"Exterior Road Lamp E {z:0}", new Vector3(6.5f, 0f, z - 15f));
         }
 
-        // Perimeter wall around the grounds, with a guarded checkpoint where
-        // the road meets it.
-        float spanX = ExteriorBoundaryX * 2f;
-        float spanZ = ExteriorBoundaryNorthZ - ExteriorBoundarySouthZ;
-        float centerZ = (ExteriorBoundaryNorthZ + ExteriorBoundarySouthZ) * 0.5f;
-        const float wallHeight = 4f;
-        CreateBlock("Exterior Perimeter Wall North", new Vector3(0f, wallHeight * 0.5f - 0.1f, ExteriorBoundaryNorthZ), new Vector3(spanX, wallHeight, 0.6f), wallColor, parent);
-        CreateBlock("Exterior Perimeter Wall West", new Vector3(-ExteriorBoundaryX, wallHeight * 0.5f - 0.1f, centerZ), new Vector3(0.6f, wallHeight, spanZ), wallColor, parent);
-        CreateBlock("Exterior Perimeter Wall East", new Vector3(ExteriorBoundaryX, wallHeight * 0.5f - 0.1f, centerZ), new Vector3(0.6f, wallHeight, spanZ), wallColor, parent);
-        float gateHalf = 7f;
-        float southSpan = ExteriorBoundaryX - gateHalf;
-        for (int side = -1; side <= 1; side += 2)
-        {
-            CreateBlock($"Exterior Perimeter Wall South {(side < 0 ? "W" : "E")}", new Vector3(side * (gateHalf + southSpan * 0.5f), wallHeight * 0.5f - 0.1f, ExteriorBoundarySouthZ), new Vector3(southSpan, wallHeight, 0.6f), wallColor, parent);
-            CreateBlock($"Exterior Checkpoint Gate Pillar {(side < 0 ? "W" : "E")}", new Vector3(side * gateHalf, 2.6f, ExteriorBoundarySouthZ), new Vector3(1.2f, 5.4f, 1.2f), new Color(0.17f, 0.19f, 0.21f), parent);
-        }
-
-        // The checkpoint barrier closes the road (the grounds end here).
-        CreateBlock("Exterior Checkpoint Barrier Gate", new Vector3(0f, 1.6f, ExteriorBoundarySouthZ), new Vector3(gateHalf * 2f - 1.2f, 3.4f, 0.4f), new Color(0.3f, 0.3f, 0.28f), parent);
-        CreateDecorationBlock("Exterior Checkpoint Barrier Hazard Stripe", new Vector3(0f, 2.2f, ExteriorBoundarySouthZ + 0.22f), new Vector3(gateHalf * 2f - 1.4f, 0.3f, 0.04f), new Color(0.92f, 0.68f, 0.12f), parent);
-        GameObject booth = CreateEnvironmentModel("GuardBooth_A", "Exterior Checkpoint Guard Booth", new Vector3(10.5f, 0f, ExteriorBoundarySouthZ + 4f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, new Color(0.16f, 0.76f, 0.72f), parent);
+        // Roadside guard post outside the base.
+        GameObject booth = CreateEnvironmentModel("GuardBooth_A", "Exterior Roadside Guard Booth", new Vector3(10.5f, 0f, -118f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, new Color(0.16f, 0.76f, 0.72f), parent);
         DisableChildColliders(booth);
         if (booth != null)
         {
@@ -5027,63 +5007,95 @@ public class PrototypeSceneBuilder : MonoBehaviour
             boothCollider.size = new Vector3(3f, 3f, 3f);
         }
 
-        // Taller invisible barrier on the perimeter so the wall can't be jumped.
-        CreateInvisibleBarrier("Exterior Boundary North", new Vector3(0f, 10f, ExteriorBoundaryNorthZ), new Vector3(spanX, 20f, 1f), parent);
-        CreateInvisibleBarrier("Exterior Boundary South", new Vector3(0f, 10f, ExteriorBoundarySouthZ), new Vector3(spanX, 20f, 1f), parent);
-        CreateInvisibleBarrier("Exterior Boundary West", new Vector3(-ExteriorBoundaryX, 10f, centerZ), new Vector3(1f, 20f, spanZ), parent);
-        CreateInvisibleBarrier("Exterior Boundary East", new Vector3(ExteriorBoundaryX, 10f, centerZ), new Vector3(1f, 20f, spanZ), parent);
-
-        // Forest and rocks, scattered deterministically and kept clear of the
-        // building, courtyard, driveway, and road.
+        // Forest and rocks: denser near the base, thinning out with distance.
         System.Random random = new System.Random(9173);
-        int treesPlaced = 0;
-        for (int attempt = 0; attempt < 900 && treesPlaced < 140; attempt++)
+        ScatterExteriorTrees(random, parent, 0f, LairPlayAreaRadius, 170);
+        ScatterExteriorTrees(random, parent, LairPlayAreaRadius, 520f, 160);
+        ScatterExteriorRocks(random, parent, 0f, LairPlayAreaRadius, 34);
+        ScatterExteriorRocks(random, parent, LairPlayAreaRadius, 450f, 30);
+
+        // Invisible limit for the player only; enemies pass freely.
+        PlayAreaBoundary boundary = root.AddComponent<PlayAreaBoundary>();
+        boundary.center = LairGroundsCenter;
+        boundary.radius = LairPlayAreaRadius;
+
+        // Attack-wave spawn markers just beyond the limit, spread around the
+        // south, east and west approaches (none behind the building).
+        GameObject spawnRoot = new GameObject("Lair Defense Spawn Points");
+        spawnRoot.transform.SetParent(parent, false);
+        float[] spawnAngles = { 180f, 150f, 210f, 120f, 240f, 95f, 265f };
+        for (int i = 0; i < spawnAngles.Length; i++)
         {
-            float x = Mathf.Lerp(-ExteriorBoundaryX + 4f, ExteriorBoundaryX - 4f, (float)random.NextDouble());
-            float z = Mathf.Lerp(ExteriorBoundarySouthZ + 4f, ExteriorBoundaryNorthZ - 4f, (float)random.NextDouble());
-            if (IsExteriorClearZone(x, z, 7f)) continue;
+            float radians = spawnAngles[i] * Mathf.Deg2Rad;
+            Vector3 position = LairGroundsCenter + new Vector3(Mathf.Sin(radians), 0f, Mathf.Cos(radians)) * LairDefenseSpawnRadius;
+            GameObject marker = new GameObject($"Defense Spawn Point {i + 1}");
+            marker.transform.SetParent(spawnRoot.transform, false);
+            marker.transform.position = position;
+            marker.transform.rotation = Quaternion.LookRotation(LairGroundsCenter - position, Vector3.up);
+        }
+    }
+
+    private void ScatterExteriorTrees(System.Random random, Transform parent, float minRadius, float maxRadius, int count)
+    {
+        int placed = 0;
+        for (int attempt = 0; attempt < count * 6 && placed < count; attempt++)
+        {
+            Vector3 point = RandomRingPoint(random, minRadius, maxRadius);
+            if (IsExteriorClearZone(point.x, point.z, 7f)) continue;
 
             float scale = 0.7f + (float)random.NextDouble() * 0.6f;
             GameObject tree = CreateEnvironmentModel(
                 "PineTree_A",
-                $"Exterior Pine {treesPlaced + 1}",
-                new Vector3(x, -0.1f, z),
+                $"Exterior Pine {minRadius:0}-{placed + 1}",
+                new Vector3(point.x, -0.1f, point.z),
                 Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f),
                 Vector3.one * scale,
                 new Color(0.16f, 0.3f, 0.15f),
                 parent);
-            if (tree == null) break;
+            if (tree == null) return;
             DisableChildColliders(tree);
-            StandModelUpright(tree, new Vector3(x, -0.1f, z));
+            StandModelUpright(tree, new Vector3(point.x, -0.1f, point.z));
+
             // Trunk collider as an upright child, independent of the model's own axes.
             GameObject trunkObject = new GameObject("Trunk Collider");
             trunkObject.transform.SetParent(tree.transform, true);
-            trunkObject.transform.position = new Vector3(x, 1.9f, z);
+            trunkObject.transform.position = new Vector3(point.x, 1.9f, point.z);
             trunkObject.transform.rotation = Quaternion.identity;
             CapsuleCollider trunk = trunkObject.AddComponent<CapsuleCollider>();
             trunk.radius = 0.4f / Mathf.Max(0.01f, trunkObject.transform.lossyScale.x);
             trunk.height = 4f / Mathf.Max(0.01f, trunkObject.transform.lossyScale.y);
-            treesPlaced++;
+            placed++;
         }
+    }
 
-        int rocksPlaced = 0;
-        for (int attempt = 0; attempt < 300 && rocksPlaced < 34; attempt++)
+    private void ScatterExteriorRocks(System.Random random, Transform parent, float minRadius, float maxRadius, int count)
+    {
+        int placed = 0;
+        for (int attempt = 0; attempt < count * 6 && placed < count; attempt++)
         {
-            float x = Mathf.Lerp(-ExteriorBoundaryX + 3f, ExteriorBoundaryX - 3f, (float)random.NextDouble());
-            float z = Mathf.Lerp(ExteriorBoundarySouthZ + 3f, ExteriorBoundaryNorthZ - 3f, (float)random.NextDouble());
-            if (IsExteriorClearZone(x, z, 5f)) continue;
+            Vector3 point = RandomRingPoint(random, minRadius, maxRadius);
+            if (IsExteriorClearZone(point.x, point.z, 5f)) continue;
 
             float scale = 0.8f + (float)random.NextDouble() * 1.4f;
             CreateEnvironmentModel(
                 "RockFormation_A",
-                $"Exterior Rock {rocksPlaced + 1}",
-                new Vector3(x, -0.25f, z),
+                $"Exterior Rock {minRadius:0}-{placed + 1}",
+                new Vector3(point.x, -0.25f, point.z),
                 Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f),
                 Vector3.one * scale,
                 new Color(0.3f, 0.3f, 0.29f),
                 parent);
-            rocksPlaced++;
+            placed++;
         }
+    }
+
+    private static Vector3 RandomRingPoint(System.Random random, float minRadius, float maxRadius)
+    {
+        float angle = (float)random.NextDouble() * Mathf.PI * 2f;
+        // Square-root keeps the spread even across the ring's area.
+        float t = (float)random.NextDouble();
+        float radius = Mathf.Sqrt(Mathf.Lerp(minRadius * minRadius, maxRadius * maxRadius, t));
+        return LairGroundsCenter + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
     }
 
     // Makes sure a tall model (like a tree) is standing: if its tallest
@@ -5144,18 +5156,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         if (InRect(-58f, 50f, -26f, 36f)) return true;     // lair and annexes
         if (InRect(-49f, 28f, -71f, -24f)) return true;    // courtyard and hangar driveway
-        if (InRect(-7f, 7f, -130f, -70f)) return true;     // access road
-        if (InRect(-14f, 14f, -130f, -118f)) return true;  // perimeter checkpoint
+        if (InRect(-7f, 7f, -1500f, -70f)) return true;    // access road
+        if (InRect(6f, 15f, -124f, -112f)) return true;    // roadside guard booth
         return false;
-    }
-
-    private void CreateInvisibleBarrier(string barrierName, Vector3 position, Vector3 size, Transform parent)
-    {
-        GameObject barrier = new GameObject(barrierName);
-        barrier.transform.SetParent(parent, false);
-        barrier.transform.position = position;
-        BoxCollider collider = barrier.AddComponent<BoxCollider>();
-        collider.size = size;
     }
 
     private void CreateLairArchitecturalOverlays(Color accentColor)

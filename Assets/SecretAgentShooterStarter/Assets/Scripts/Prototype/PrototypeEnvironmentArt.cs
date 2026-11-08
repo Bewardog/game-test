@@ -392,15 +392,20 @@ public static class PrototypeEnvironmentArt
         ConfigureSun(runtimeRoot);
         ConfigureReflectionProbe(runtimeRoot, hub);
         ConfigurePostProcessing(runtimeRoot);
-        CreateMountainRings(runtimeRoot, environment, hub);
-        CreateEnvironmentSignatureBackdrop(runtimeRoot, environment, hub);
+        // The lair sits in open, endless grounds that fade into fog, so it
+        // gets no ring of ridges, skyline, or backdrop wrapped around it.
+        if (!hub)
+        {
+            CreateMountainRings(runtimeRoot, environment, hub);
+            CreateEnvironmentSignatureBackdrop(runtimeRoot, environment, hub);
+        }
+
         CreateAmbientAtmospherics(runtimeRoot, environment, hub);
 
-        if (hub ||
-            environment == MissionEnvironmentType.ExecutiveStronghold ||
+        if (environment == MissionEnvironmentType.ExecutiveStronghold ||
             environment == MissionEnvironmentType.Embassy)
         {
-            CreateDistantSkyline(runtimeRoot, hub ? -155f : 135f, hub);
+            if (!hub) CreateDistantSkyline(runtimeRoot, 135f, false);
         }
 
         if (environment == MissionEnvironmentType.WeaponsLaboratory ||
