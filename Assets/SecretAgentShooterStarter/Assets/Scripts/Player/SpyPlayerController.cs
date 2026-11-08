@@ -201,6 +201,14 @@ public class SpyPlayerController : MonoBehaviour
             return;
         }
 
+        if (ridingPlatform)
+        {
+            // Riding the elevator: the car carries the player, who can still look around.
+            UpdateLook();
+            CurrentInteractionPrompt = string.Empty;
+            return;
+        }
+
         UpdateLook();
         UpdateMovement();
         UpdateActions();
@@ -300,6 +308,32 @@ public class SpyPlayerController : MonoBehaviour
         CurrentInteractionPrompt = string.Empty;
         Cursor.lockState = locked ? CursorLockMode.None : CursorLockMode.Locked;
         Cursor.visible = locked;
+    }
+
+    private bool ridingPlatform;
+    public bool IsRidingPlatform => ridingPlatform;
+
+    // Used by moving platforms such as the lair elevator. The character
+    // controller is paused during the ride so the platform can carry the player.
+    public void BeginPlatformRide()
+    {
+        ridingPlatform = true;
+        velocity = Vector3.zero;
+        if (controller != null) controller.enabled = false;
+    }
+
+    public void MoveWithPlatform(Vector3 delta)
+    {
+        if (!ridingPlatform) return;
+        transform.position += delta;
+    }
+
+    public void EndPlatformRide()
+    {
+        if (!ridingPlatform) return;
+        ridingPlatform = false;
+        velocity = Vector3.zero;
+        if (controller != null) controller.enabled = true;
     }
 
     public void Teleport(Vector3 destination)

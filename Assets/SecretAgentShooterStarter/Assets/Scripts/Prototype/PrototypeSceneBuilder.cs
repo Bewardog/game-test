@@ -53,6 +53,11 @@ public class PrototypeSceneBuilder : MonoBehaviour
         public float doorWidth;
         public float doorHeight;
         public Vector2 legacySize;  // original room footprint, used to spread props proportionally
+        public bool exteriorDoor;   // entered from outside through the south facade instead of the atrium
+
+        // Exterior doors sit in the south wall, this far out from the atrium wall.
+        public float ExteriorDoorX => side * (LairHalfWidth + 14f);
+        public float SouthWallZ => centerZ - depth * 0.5f;
 
         public Vector3 Position => new Vector3(side * (LairHalfWidth + width * 0.5f), floorY, centerZ);
         public float EntranceWallX => side * LairHalfWidth;
@@ -64,7 +69,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
     // between LairDepthMinZ and LairDepthMaxZ.
     private static readonly LairRoomSpec[] LairRoomSpecs =
     {
-        Room(RoomType.Garage,                 -1f, 0f,                     6f,  34f, 46f, 9f,   12f,  7f,   15f, 18f),
+        Room(RoomType.Garage,                 -1f, 0f,                     2.15f, 34f, 53.7f, 9f, 12f,  7f,   15f, 18f, false, true),
         Room(RoomType.MedicalBay,              1f, 0f,                     6f,  24f, 26f, 8.5f, 4.4f, 4f,   10f, 11f),
         Room(RoomType.Armory,                 -1f, LairOperationsY + 0.2f, -12f, 22f, 23f, 8.5f, 4.4f, 4f,   10f, 11f),
         Room(RoomType.TrainingRoom,           -1f, LairOperationsY + 0.2f, 17f,  30f, 32f, 8.5f, 6f,   4.5f, 14f, 17f),
@@ -86,12 +91,14 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float doorHeight,
         float legacyWidth,
         float legacyDepth,
-        bool isRecruitQuarters = false)
+        bool isRecruitQuarters = false,
+        bool exteriorDoor = false)
     {
         return new LairRoomSpec
         {
             roomType = roomType,
             isRecruitQuarters = isRecruitQuarters,
+            exteriorDoor = exteriorDoor,
             side = side,
             floorY = floorY,
             centerZ = centerZ,
@@ -108,6 +115,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
     // current room's size. Reset to one outside room construction.
     private Vector2 hubRoomSpread = Vector2.one;
     private float hubRoomHeight = LairRoomHeight;
+    private bool hubRoomHasAtriumDoor = true;
+    private float hubRoomExteriorDoorX;
+    private float hubRoomSouthWallZ;
 
     private Vector3 Spread(Vector3 offset)
     {
@@ -4362,9 +4372,6 @@ public class PrototypeSceneBuilder : MonoBehaviour
         const float lairDepth = 60f;
         const float lairCenterZ = 5f;
         const float wallHeight = 26f;
-        const float wingCenterX = 13f;
-        const float wingWidth = 17f;
-        const float wingDepth = 56f;
 
         CreateBlock("Ground Floor", new Vector3(0f, -0.55f, lairCenterZ), new Vector3(lairWidth, 1f, lairDepth), floor);
         CreateLairSideWall(-1f, wall);
@@ -4379,20 +4386,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
         CreateBlock("Lair Roof East", new Vector3(13f, LairRoofY, lairCenterZ), new Vector3(17f, 0.6f, lairDepth), shaft);
         CreateBlock("Lair Roof Center", new Vector3(0f, LairRoofY, lairCenterZ), new Vector3(9f, 0.35f, lairDepth), new Color(0.12f, 0.2f, 0.22f));
 
-        CreateBlock("Level 2 West Wing", new Vector3(-wingCenterX, LairOperationsY, lairCenterZ), new Vector3(wingWidth, 0.4f, wingDepth), platform);
-        CreateBlock("Level 2 East Wing", new Vector3(wingCenterX, LairOperationsY, lairCenterZ), new Vector3(wingWidth, 0.4f, wingDepth), platform);
-        CreateBlock("Level 2 Elevator Bridge", new Vector3(0f, LairOperationsY, 28f), new Vector3(9f, 0.4f, 8f), platform);
-        CreateBlock("Level 2 Front Bridge", new Vector3(0f, LairOperationsY, -17f), new Vector3(9f, 0.4f, 8f), platform);
-
-        CreateBlock("Level 3 West Wing", new Vector3(-wingCenterX, LairCommandY, lairCenterZ), new Vector3(wingWidth, 0.4f, wingDepth), platform);
-        CreateBlock("Level 3 East Wing", new Vector3(wingCenterX, LairCommandY, lairCenterZ), new Vector3(wingWidth, 0.4f, wingDepth), platform);
-        CreateBlock("Level 3 Elevator Bridge", new Vector3(0f, LairCommandY, 28f), new Vector3(9f, 0.4f, 8f), platform);
-        CreateBlock("Level 3 Front Bridge", new Vector3(0f, LairCommandY, -17f), new Vector3(9f, 0.4f, 8f), platform);
-
-        CreateBlock("Level 2 West Atrium Rail", new Vector3(-4.6f, LairOperationsY + 0.65f, 4f), new Vector3(0.18f, 1.1f, 40f), rail);
-        CreateBlock("Level 2 East Atrium Rail", new Vector3(4.6f, LairOperationsY + 0.65f, 4f), new Vector3(0.18f, 1.1f, 40f), rail);
-        CreateBlock("Level 3 West Atrium Rail", new Vector3(-4.6f, LairCommandY + 0.65f, 4f), new Vector3(0.18f, 1.1f, 40f), rail);
-        CreateBlock("Level 3 East Atrium Rail", new Vector3(4.6f, LairCommandY + 0.65f, 4f), new Vector3(0.18f, 1.1f, 40f), rail);
+        CreateLairUpperFloor("Level 2", LairOperationsY, platform, rail);
+        CreateLairUpperFloor("Level 3", LairCommandY, platform, rail);
+        CreateAtriumSupportPillars(platform, rail);
 
         CreateLairArchitecturalOverlays(rail);
 
@@ -4428,28 +4424,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 2.6f);
         }
 
-        CreateBlock("Elevator Shaft", new Vector3(0f, 12.5f, 31f), new Vector3(7f, wallHeight, 4f), shaft);
-        CreateElevatorStation(
-            0f,
-            "GROUND // LOGISTICS",
-            "Operations Level",
-            new Vector3(0f, LairOperationsY + 0.55f, 26.5f),
-            "Command Level",
-            new Vector3(0f, LairCommandY + 0.55f, 26.5f));
-        CreateElevatorStation(
-            LairOperationsY,
-            "LEVEL 2 // OPERATIONS",
-            "Ground Level",
-            new Vector3(0f, 0.55f, 26.5f),
-            "Command Level",
-            new Vector3(0f, LairCommandY + 0.55f, 26.5f));
-        CreateElevatorStation(
-            LairCommandY,
-            "LEVEL 3 // COMMAND",
-            "Ground Level",
-            new Vector3(0f, 0.55f, 26.5f),
-            "Operations Level",
-            new Vector3(0f, LairOperationsY + 0.55f, 26.5f));
+        CreateLairElevator(shaft);
         CreateLairWayfindingDirectories();
 
         CreateLairArrivalCourtyard(wall, platform, rail);
@@ -4473,7 +4448,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         List<Rect> openings = new List<Rect>();
         foreach (LairRoomSpec spec in LairRoomSpecs)
         {
-            if (!Mathf.Approximately(spec.side, side)) continue;
+            if (!Mathf.Approximately(spec.side, side) || spec.exteriorDoor) continue;
             float openingWidth = spec.doorWidth + 0.2f;
             openings.Add(new Rect(
                 spec.centerZ - openingWidth * 0.5f,
@@ -4572,17 +4547,146 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float height = shellTop + 0.5f;
         float centerY = -0.5f + height * 0.5f;
 
-        CreateBlock($"{sideName} Annex South Facade", new Vector3(centerX, centerY, LairDepthMinZ), new Vector3(spanX, height, 0.6f), wallColor);
+        // South facade, with an opening for any room entered from outside.
+        float facadeMinX = Mathf.Min(innerX, outerX);
+        float facadeMaxX = Mathf.Max(innerX, outerX);
+        float facadeBottom = -0.5f;
+        float facadeTop = facadeBottom + height;
+        bool hasOpening = false;
+        foreach (LairRoomSpec spec in LairRoomSpecs)
+        {
+            if (!Mathf.Approximately(spec.side, side) || !spec.exteriorDoor) continue;
+            hasOpening = true;
+            float doorMinX = spec.ExteriorDoorX - spec.doorWidth * 0.5f;
+            float doorMaxX = spec.ExteriorDoorX + spec.doorWidth * 0.5f;
+            float doorTop = spec.floorY + spec.doorHeight;
+            CreateFacadeSpan($"{sideName} Annex South Facade A", facadeMinX, doorMinX, facadeBottom, facadeTop, wallColor);
+            CreateFacadeSpan($"{sideName} Annex South Facade B", doorMaxX, facadeMaxX, facadeBottom, facadeTop, wallColor);
+            CreateFacadeSpan($"{sideName} Annex South Facade Over Door", doorMinX, doorMaxX, doorTop, facadeTop, wallColor);
+            break;
+        }
+
+        if (!hasOpening)
+        {
+            CreateBlock($"{sideName} Annex South Facade", new Vector3(centerX, centerY, LairDepthMinZ), new Vector3(spanX, height, 0.6f), wallColor);
+        }
         CreateBlock($"{sideName} Annex North Wall", new Vector3(centerX, centerY, LairDepthMaxZ), new Vector3(spanX, height, 0.6f), shellColor);
         CreateBlock($"{sideName} Annex Outer Wall", new Vector3(outerX, centerY, centerZ), new Vector3(0.6f, height, depth), shellColor);
         CreateBlock($"{sideName} Annex Roof", new Vector3(centerX, shellTop, centerZ), new Vector3(spanX, 0.6f, depth), shellColor);
         CreateBlock($"{sideName} Annex Foundation", new Vector3(centerX, -0.55f, centerZ), new Vector3(spanX, 1f, depth), new Color(0.075f, 0.095f, 0.11f));
     }
 
+    // Atrium layout shared by the upper floors, the elevator, and the railings.
+    private const float AtriumHalfWidth = 4.5f;
+    private const float AtriumOpeningMinZ = -13f;
+    private const float AtriumOpeningMaxZ = 24f;
+    private const float ElevatorShaftHalfWidth = 2.6f;
+    private const float ElevatorShaftFrontZ = 29f;
+
+    // One upper level of the atrium building: wings that run wall to wall, a
+    // front bridge that meets the facade, an elevator landing, and floor beside
+    // the shaft, so the only opening left is the atrium itself.
+    private void CreateLairUpperFloor(string levelName, float levelY, Color platformColor, Color railColor)
+    {
+        float innerWall = LairHalfWidth - 0.3f;
+        float wingWidth = innerWall - AtriumHalfWidth;
+        float wingCenterX = AtriumHalfWidth + wingWidth * 0.5f;
+        float depth = LairDepthMaxZ - LairDepthMinZ;
+        float centerZ = (LairDepthMinZ + LairDepthMaxZ) * 0.5f;
+
+        CreateBlock($"{levelName} West Wing Floor", new Vector3(-wingCenterX, levelY, centerZ), new Vector3(wingWidth, 0.4f, depth), platformColor);
+        CreateBlock($"{levelName} East Wing Floor", new Vector3(wingCenterX, levelY, centerZ), new Vector3(wingWidth, 0.4f, depth), platformColor);
+
+        float frontDepth = AtriumOpeningMinZ - LairDepthMinZ;
+        CreateBlock($"{levelName} Front Bridge Floor", new Vector3(0f, levelY, LairDepthMinZ + frontDepth * 0.5f), new Vector3(AtriumHalfWidth * 2f, 0.4f, frontDepth), platformColor);
+
+        float landingDepth = ElevatorShaftFrontZ - AtriumOpeningMaxZ;
+        CreateBlock($"{levelName} Elevator Landing Floor", new Vector3(0f, levelY, AtriumOpeningMaxZ + landingDepth * 0.5f), new Vector3(AtriumHalfWidth * 2f, 0.4f, landingDepth), platformColor);
+
+        float besideShaftWidth = AtriumHalfWidth - ElevatorShaftHalfWidth;
+        float besideShaftDepth = LairDepthMaxZ - ElevatorShaftFrontZ;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateBlock(
+                $"{levelName} {(side < 0 ? "West" : "East")} Shaft-Side Floor",
+                new Vector3(side * (ElevatorShaftHalfWidth + besideShaftWidth * 0.5f), levelY, ElevatorShaftFrontZ + besideShaftDepth * 0.5f),
+                new Vector3(besideShaftWidth, 0.4f, besideShaftDepth),
+                platformColor);
+        }
+
+        // Railings around the whole atrium opening, plus a lit fascia on its edge.
+        float railY = levelY + 0.2f + 0.55f;
+        float openingDepth = AtriumOpeningMaxZ - AtriumOpeningMinZ;
+        float openingCenterZ = (AtriumOpeningMinZ + AtriumOpeningMaxZ) * 0.5f;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            string sideName = side < 0 ? "West" : "East";
+            CreateBlock($"{levelName} {sideName} Atrium Rail", new Vector3(side * (AtriumHalfWidth + 0.1f), railY, openingCenterZ), new Vector3(0.18f, 1.1f, openingDepth), railColor);
+            CreateDecorationBlock($"{levelName} {sideName} Atrium Edge Light", new Vector3(side * (AtriumHalfWidth + 0.02f), levelY - 0.05f, openingCenterZ), new Vector3(0.06f, 0.18f, openingDepth), railColor);
+        }
+
+        CreateBlock($"{levelName} South Atrium Rail", new Vector3(0f, railY, AtriumOpeningMinZ - 0.1f), new Vector3(AtriumHalfWidth * 2f + 0.2f, 1.1f, 0.18f), railColor);
+        CreateBlock($"{levelName} North Atrium Rail", new Vector3(0f, railY, AtriumOpeningMaxZ + 0.1f), new Vector3(AtriumHalfWidth * 2f + 0.2f, 1.1f, 0.18f), railColor);
+        CreateDecorationBlock($"{levelName} South Atrium Edge Light", new Vector3(0f, levelY - 0.05f, AtriumOpeningMinZ - 0.02f), new Vector3(AtriumHalfWidth * 2f, 0.18f, 0.06f), railColor);
+        CreateDecorationBlock($"{levelName} North Atrium Edge Light", new Vector3(0f, levelY - 0.05f, AtriumOpeningMaxZ + 0.02f), new Vector3(AtriumHalfWidth * 2f, 0.18f, 0.06f), railColor);
+
+        // Lights on the underside of this floor so the level below isn't left in the dark.
+        float[] lightZ = { -18f, -4f, 10f, 24f };
+        foreach (float z in lightZ)
+        {
+            for (int side = -1; side <= 1; side += 2)
+            {
+                CreateFacilityCeilingLight(
+                    $"{levelName} {(side < 0 ? "West" : "East")} Underside Light {z:0}",
+                    new Vector3(side * wingCenterX, levelY - 0.55f, z),
+                    new Color(0.2f, 0.62f, 0.68f),
+                    16f,
+                    null,
+                    2.2f);
+            }
+        }
+    }
+
+    // Structural pillars carrying the upper floors along the atrium edges, from
+    // the ground floor up to the roof.
+    private void CreateAtriumSupportPillars(Color pillarColor, Color accentColor)
+    {
+        float[] pillarZ = { AtriumOpeningMinZ, -3f, 7f, 17f, AtriumOpeningMaxZ };
+        float height = LairRoofY + 0.05f;
+        foreach (float z in pillarZ)
+        {
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float x = side * (AtriumHalfWidth + 0.65f);
+                CreateBlock(
+                    $"Atrium Support Pillar {(side < 0 ? "W" : "E")}{z:0}",
+                    new Vector3(x, height * 0.5f - 0.05f, z),
+                    new Vector3(0.8f, height, 0.8f),
+                    Color.Lerp(pillarColor, Color.black, 0.15f));
+                CreateDecorationBlock(
+                    $"Atrium Pillar Light Strip {(side < 0 ? "W" : "E")}{z:0}",
+                    new Vector3(x - side * 0.41f, height * 0.5f - 0.05f, z),
+                    new Vector3(0.04f, height - 0.6f, 0.12f),
+                    accentColor);
+            }
+        }
+    }
+
+    private void CreateFacadeSpan(string spanName, float minX, float maxX, float bottom, float top, Color color)
+    {
+        if (maxX - minX < 0.05f || top - bottom < 0.05f) return;
+        CreateBlock(
+            spanName,
+            new Vector3((minX + maxX) * 0.5f, (bottom + top) * 0.5f, LairDepthMinZ),
+            new Vector3(maxX - minX, top - bottom, 0.6f),
+            color);
+    }
+
     private void CreateLairArchitecturalOverlays(Color accentColor)
     {
         float[] floors = { LairOperationsY, LairCommandY };
-        float[] bridgeZ = { -17f, 28f };
+        float[] bridgeZ = { -17f, 26.5f };
+        float[] bridgeScaleZ = { 2.65f, 2f };
         for (int floorIndex = 0; floorIndex < floors.Length; floorIndex++)
         {
             float floorY = floors[floorIndex];
@@ -4594,7 +4698,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                     $"{floorName} {bridgeIndex + 1} Architectural Catwalk",
                     new Vector3(0f, floorY + 0.2f, bridgeZ[bridgeIndex]),
                     Quaternion.identity,
-                    new Vector3(1.42f, 1f, 2.65f),
+                    new Vector3(1.42f, 1f, bridgeScaleZ[bridgeIndex]),
                     accentColor);
                 DisableChildColliders(catwalk);
             }
@@ -4604,9 +4708,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 GameObject railing = CreateEnvironmentModel(
                     "SafetyRailing_A",
                     $"{floorName} {(side < 0 ? "West" : "East")} Architectural Railing",
-                    new Vector3(side * 4.62f, floorY + 0.02f, 4f),
+                    new Vector3(side * 4.62f, floorY + 0.22f, 5.5f),
                     Quaternion.Euler(0f, 90f, 0f),
-                    new Vector3(10f, 1f, 1f),
+                    new Vector3(9.25f, 1f, 1f),
                     accentColor);
                 DisableChildColliders(railing);
             }
@@ -4619,17 +4723,17 @@ public class PrototypeSceneBuilder : MonoBehaviour
             "Ground Logistics Directory",
             new Vector3(0f, 0f, 20.5f),
             "G  LOGISTICS",
-            "MECH HANGAR  <     >  MEDICAL BAY\nMISSION CONTROL  SOUTH",
+            "MEDICAL BAY  >\nMECH HANGAR  VIA WEST COURTYARD\nMISSION CONTROL  SOUTH",
             new Color(0.16f, 0.76f, 0.72f));
         CreateLairDirectoryPylon(
             "Operations Directory",
-            new Vector3(0f, LairOperationsY, 20.5f),
+            new Vector3(-3.3f, LairOperationsY + 0.2f, 26.2f),
             "2  OPERATIONS",
             "ARMORY  <     >  RESEARCH LAB\nTRAINING ROOM  WEST",
             new Color(0.18f, 0.58f, 0.84f));
         CreateLairDirectoryPylon(
             "Command Directory",
-            new Vector3(0f, LairCommandY, 20.5f),
+            new Vector3(-3.3f, LairCommandY + 0.2f, 26.2f),
             "3  COMMAND",
             "CUSTOMIZATION  <     >  INTEL CENTER\nRECRUIT QUARTERS  NORTH",
             new Color(0.54f, 0.4f, 0.74f));
@@ -4684,10 +4788,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
             new Vector3(0f, -0.46f, courtyardCenterZ),
             new Vector3(54f, 0.8f, courtyardDepth),
             courtyardFloor);
+        // The north part of the west retaining wall is left open onto the
+        // mech hangar's driveway apron.
         CreateBlock(
             "Courtyard West Retaining Wall",
-            new Vector3(-27f, 1.45f, courtyardCenterZ),
-            new Vector3(0.55f, 3.2f, courtyardDepth),
+            new Vector3(-27f, 1.45f, -57.5f),
+            new Vector3(0.55f, 3.2f, 25f),
             wallColor);
         CreateBlock(
             "Courtyard East Retaining Wall",
@@ -4953,6 +5059,9 @@ public class PrototypeSceneBuilder : MonoBehaviour
         float doorHeight = spec.doorHeight;
         hubRoomSpread = new Vector2(roomWidth / spec.legacySize.x, roomDepth / spec.legacySize.y);
         hubRoomHeight = roomHeight;
+        hubRoomHasAtriumDoor = !spec.exteriorDoor;
+        hubRoomExteriorDoorX = spec.ExteriorDoorX;
+        hubRoomSouthWallZ = spec.SouthWallZ;
         Color floorColor = new Color(0.14f, 0.16f, 0.17f);
         Color wallColor = Color.Lerp(new Color(0.22f, 0.24f, 0.26f), accentColor, 0.08f);
         Color ceilingColor = new Color(0.105f, 0.125f, 0.14f);
@@ -4976,24 +5085,42 @@ public class PrototypeSceneBuilder : MonoBehaviour
             new Vector3(roomWidth, roomHeight, 0.32f),
             wallColor,
             shell.transform);
-        CreateBlock(
-            $"{roomType} South Wall",
-            position + new Vector3(0f, roomHeight * 0.5f, -roomDepth * 0.5f),
-            new Vector3(roomWidth, roomHeight, 0.32f),
-            wallColor,
-            shell.transform);
-        CreateVerticalDoorWall(
-            $"{roomType} Atrium Entrance",
-            entranceWallX,
-            position.z,
-            roomDepth,
-            wallY,
-            roomHeight,
-            position.z,
-            doorWidth,
-            wallColor,
-            shell.transform,
-            doorHeight);
+        if (spec.exteriorDoor)
+        {
+            // Entered from outside: the south wall gets the big door and the
+            // atrium side stays solid.
+            float southZ = spec.SouthWallZ;
+            float roomMinX = Mathf.Min(entranceWallX, outerWallX);
+            float roomMaxX = Mathf.Max(entranceWallX, outerWallX);
+            float doorMinX = spec.ExteriorDoorX - doorWidth * 0.5f;
+            float doorMaxX = spec.ExteriorDoorX + doorWidth * 0.5f;
+            CreateBlock($"{roomType} South Wall A", new Vector3((roomMinX + doorMinX) * 0.5f, wallY, southZ), new Vector3(doorMinX - roomMinX, roomHeight, 0.32f), wallColor, shell.transform);
+            CreateBlock($"{roomType} South Wall B", new Vector3((doorMaxX + roomMaxX) * 0.5f, wallY, southZ), new Vector3(roomMaxX - doorMaxX, roomHeight, 0.32f), wallColor, shell.transform);
+            CreateBlock($"{roomType} South Wall Over Door", new Vector3(spec.ExteriorDoorX, position.y + (doorHeight + roomHeight) * 0.5f, southZ), new Vector3(doorWidth, roomHeight - doorHeight, 0.32f), wallColor, shell.transform);
+            CreateBlock($"{roomType} Atrium Side Wall", new Vector3(entranceWallX, wallY, position.z), new Vector3(0.32f, roomHeight, roomDepth), wallColor, shell.transform);
+            CreateHangarExteriorDoor(spec, accentColor);
+        }
+        else
+        {
+            CreateBlock(
+                $"{roomType} South Wall",
+                position + new Vector3(0f, roomHeight * 0.5f, -roomDepth * 0.5f),
+                new Vector3(roomWidth, roomHeight, 0.32f),
+                wallColor,
+                shell.transform);
+            CreateVerticalDoorWall(
+                $"{roomType} Atrium Entrance",
+                entranceWallX,
+                position.z,
+                roomDepth,
+                wallY,
+                roomHeight,
+                position.z,
+                doorWidth,
+                wallColor,
+                shell.transform,
+                doorHeight);
+        }
         CreateBlock(
             $"{roomType} Finished Ceiling",
             position + new Vector3(0f, roomHeight - 0.05f, 0f),
@@ -5016,30 +5143,33 @@ public class PrototypeSceneBuilder : MonoBehaviour
             shell.transform);
 
         float frameX = entranceWallX - sideDirection * 0.18f;
-        CreateDecorationBlock(
-            $"{roomType} Door Frame South",
-            new Vector3(frameX, position.y + doorHeight * 0.5f, position.z - doorWidth * 0.5f),
-            new Vector3(0.18f, doorHeight, 0.24f),
-            accentColor,
-            shell.transform);
-        CreateDecorationBlock(
-            $"{roomType} Door Frame North",
-            new Vector3(frameX, position.y + doorHeight * 0.5f, position.z + doorWidth * 0.5f),
-            new Vector3(0.18f, doorHeight, 0.24f),
-            accentColor,
-            shell.transform);
-        CreateDecorationBlock(
-            $"{roomType} Door Frame Header",
-            new Vector3(frameX, position.y + doorHeight, position.z),
-            new Vector3(0.18f, 0.24f, doorWidth),
-            accentColor,
-            shell.transform);
-        CreateDecorationBlock(
-            $"{roomType} Door Threshold",
-            new Vector3(entranceWallX, position.y + 0.08f, position.z),
-            new Vector3(1.1f, 0.06f, doorWidth - 0.35f),
-            accentColor,
-            shell.transform);
+        if (hubRoomHasAtriumDoor)
+        {
+            CreateDecorationBlock(
+                $"{roomType} Door Frame South",
+                new Vector3(frameX, position.y + doorHeight * 0.5f, position.z - doorWidth * 0.5f),
+                new Vector3(0.18f, doorHeight, 0.24f),
+                accentColor,
+                shell.transform);
+            CreateDecorationBlock(
+                $"{roomType} Door Frame North",
+                new Vector3(frameX, position.y + doorHeight * 0.5f, position.z + doorWidth * 0.5f),
+                new Vector3(0.18f, doorHeight, 0.24f),
+                accentColor,
+                shell.transform);
+            CreateDecorationBlock(
+                $"{roomType} Door Frame Header",
+                new Vector3(frameX, position.y + doorHeight, position.z),
+                new Vector3(0.18f, 0.24f, doorWidth),
+                accentColor,
+                shell.transform);
+            CreateDecorationBlock(
+                $"{roomType} Door Threshold",
+                new Vector3(entranceWallX, position.y + 0.08f, position.z),
+                new Vector3(1.1f, 0.06f, doorWidth - 0.35f),
+                accentColor,
+                shell.transform);
+        }
 
         CreateRoomWallDetails(
             roomType,
@@ -5157,6 +5287,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
         // Keep the upgrade console beside the doorway so it is easy to find in the larger rooms.
         float terminalZ = Mathf.Max(position.z - roomDepth * 0.5f + 1.15f, position.z - doorWidth * 0.5f - 1.4f);
         float terminalYaw = sideDirection < 0f ? 90f : -90f;
+        if (spec.exteriorDoor)
+        {
+            terminalX = spec.ExteriorDoorX - sideDirection * (doorWidth * 0.5f + 2f);
+            terminalZ = spec.SouthWallZ + 1.15f;
+            terminalYaw = 180f;
+        }
         GameObject terminal = CreateEnvironmentModel(
             "LabConsole_A",
             $"{roomType} Upgrade Terminal",
@@ -5183,15 +5319,29 @@ public class PrototypeSceneBuilder : MonoBehaviour
         upgrade.roomToUpgrade = roomType;
         upgrade.lairManager = SecretLairManager.Instance;
 
-        CreateWorldLabel(
-            FormatRoomName(roomType),
-            new Vector3(frameX, position.y + doorHeight + 0.48f, position.z),
-            Color.white,
-            roomType == RoomType.OperativeCustomization ? 0.12f : 0.15f,
-            shell.transform);
+        if (hubRoomHasAtriumDoor)
+        {
+            CreateWorldLabel(
+                FormatRoomName(roomType),
+                new Vector3(frameX, position.y + doorHeight + 0.48f, position.z),
+                Color.white,
+                roomType == RoomType.OperativeCustomization ? 0.12f : 0.15f,
+                shell.transform);
+        }
+        else
+        {
+            CreateWorldLabel(
+                FormatRoomName(roomType),
+                new Vector3(spec.ExteriorDoorX, position.y + doorHeight + 0.9f, LairDepthMinZ - 0.4f),
+                Color.white,
+                0.3f,
+                shell.transform);
+        }
+
         SecretLairManager.Instance?.RegisterRoomVisual(roomType, contentRoot, levelVisuals);
         hubRoomSpread = Vector2.one;
         hubRoomHeight = LairRoomHeight;
+        hubRoomHasAtriumDoor = true;
     }
 
     private void CreateHubRoomArchitecture(
@@ -5231,6 +5381,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
             accentColor,
             parent);
         DisableChildColliders(modeledShell);
+
+        if (!hubRoomHasAtriumDoor)
+        {
+            CreateGarageServiceShutter(roomType, position, roomDepth, roomHeight, outerWallX, sideDirection, roomYaw, accentColor, parent);
+            return;
+        }
 
         GameObject bulkhead = CreateEnvironmentModel(
             "RoomBulkhead_A",
@@ -5380,7 +5536,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
         Transform parent)
     {
         float doorwayYaw = sideDirection < 0f ? 90f : -90f;
-        CreateEnvironmentModel(
+        if (hubRoomHasAtriumDoor) CreateEnvironmentModel(
             "DoorFrame_A",
             $"{roomType} Modeled Door Frame",
             new Vector3(entranceWallX - sideDirection * 0.2f, position.y + 0.02f, position.z),
@@ -5474,6 +5630,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
             parent);
 
         if (roomType != RoomType.Garage && roomType != RoomType.TrainingRoom) return;
+        if (!hubRoomHasAtriumDoor) return;
 
         float entrancePostZ = doorWidth * 0.5f + 0.55f;
         CreateEnvironmentModel(
@@ -5671,12 +5828,24 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
 
         // Hazard striping across the entrance and around the service berths.
-        CreateDecorationBlock(
-            "Hangar Entrance Hazard Stripe",
-            new Vector3(entranceWallX + sideDirection * 1.4f, position.y + 0.1f, position.z),
-            new Vector3(0.5f, 0.04f, doorWidth),
-            hazardColor,
-            parent);
+        if (hubRoomHasAtriumDoor)
+        {
+            CreateDecorationBlock(
+                "Hangar Entrance Hazard Stripe",
+                new Vector3(entranceWallX + sideDirection * 1.4f, position.y + 0.1f, position.z),
+                new Vector3(0.5f, 0.04f, doorWidth),
+                hazardColor,
+                parent);
+        }
+        else
+        {
+            CreateDecorationBlock(
+                "Hangar Exterior Door Hazard Stripe",
+                new Vector3(hubRoomExteriorDoorX, position.y + 0.1f, hubRoomSouthWallZ + 1.4f),
+                new Vector3(doorWidth, 0.04f, 0.5f),
+                hazardColor,
+                parent);
+        }
         CreateDecorationBlock(
             "Hangar Berth Boundary North",
             new Vector3(position.x, position.y + 0.1f, position.z + roomDepth * 0.38f),
@@ -5704,6 +5873,7 @@ public class PrototypeSceneBuilder : MonoBehaviour
                 slot % 2 == 0 ? new Vector3(1.35f, 1.3f, 1.2f) : new Vector3(2.2f, 2.1f, 1.4f),
                 slot % 2 == 0 ? new Vector3(0f, 0.65f, 0f) : new Vector3(0f, 1.05f, 0f),
                 parent);
+            if (!hubRoomHasAtriumDoor && Mathf.Abs(x - hubRoomExteriorDoorX) < doorWidth * 0.5f + 2.5f) continue;
             CreateFacilityProp(
                 slot % 2 == 0 ? "Models/Facility/FabricationBench" : "Models/Facility/CargoCrate",
                 $"Hangar South Service Equipment {slot + 1}",
@@ -5724,6 +5894,108 @@ public class PrototypeSceneBuilder : MonoBehaviour
             accentColor,
             parent);
         DisableChildColliders(toolWall);
+    }
+
+    private void CreateGarageServiceShutter(
+        RoomType roomType,
+        Vector3 position,
+        float roomDepth,
+        float roomHeight,
+        float outerWallX,
+        float sideDirection,
+        float roomYaw,
+        Color accentColor,
+        Transform parent)
+    {
+        if (roomType != RoomType.Garage) return;
+        GameObject serviceDoor = CreateEnvironmentModel(
+            "GarageDoor_A",
+            "Mech Hangar Rear Service Shutter",
+            new Vector3(outerWallX - sideDirection * 0.25f, position.y, position.z),
+            Quaternion.Euler(0f, roomYaw, 0f),
+            new Vector3(
+                Mathf.Min(roomDepth - 1.5f, 16f) / 10f,
+                Mathf.Min(roomHeight - 1f, 7f) / 5.23f,
+                1f),
+            accentColor,
+            parent);
+        DisableChildColliders(serviceDoor);
+    }
+
+    // The hangar's main entrance: a large sliding door in the south facade that
+    // opens onto a driveway apron off the arrival courtyard.
+    private void CreateHangarExteriorDoor(LairRoomSpec spec, Color accentColor)
+    {
+        float doorWidth = spec.doorWidth;
+        float doorHeight = spec.doorHeight;
+        float doorX = spec.ExteriorDoorX;
+        Color panelColor = new Color(0.2f, 0.22f, 0.24f);
+        Color hazardColor = new Color(0.92f, 0.68f, 0.12f);
+
+        SlidingSecurityDoor door = CreateSlidingSecurityDoor(
+            "Mech Hangar Exterior Door",
+            new Vector3(doorX, spec.floorY + doorHeight * 0.5f, LairDepthMinZ),
+            Quaternion.identity,
+            doorWidth,
+            doorHeight,
+            panelColor,
+            accentColor);
+        door.slideSpeed = 3.2f;
+        door.closeDelay = 2.5f;
+        BoxCollider trigger = door.GetComponent<BoxCollider>();
+        if (trigger != null) trigger.size = new Vector3(doorWidth + 4f, doorHeight, 12f);
+
+        // Door surround.
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateDecorationBlock(
+                $"Hangar Door Hazard Jamb {(side < 0 ? "A" : "B")}",
+                new Vector3(doorX + side * (doorWidth * 0.5f + 0.25f), spec.floorY + doorHeight * 0.5f, LairDepthMinZ - 0.34f),
+                new Vector3(0.5f, doorHeight, 0.08f),
+                hazardColor);
+        }
+
+        CreateDecorationBlock(
+            "Hangar Door Header Light",
+            new Vector3(doorX, spec.floorY + doorHeight + 0.25f, LairDepthMinZ - 0.34f),
+            new Vector3(doorWidth + 1f, 0.3f, 0.08f),
+            accentColor);
+
+        CreateHangarApron(spec);
+    }
+
+    // Paved driveway from the arrival courtyard to the hangar door.
+    private void CreateHangarApron(LairRoomSpec spec)
+    {
+        Color apronFloor = new Color(0.1f, 0.12f, 0.13f);
+        Color wallColor = new Color(0.2f, 0.22f, 0.24f);
+        Color hazardColor = new Color(0.92f, 0.68f, 0.12f);
+        float side = spec.side;
+        float courtyardEdgeX = side * 27f;
+        float apronOuterX = spec.ExteriorDoorX + side * (spec.doorWidth * 0.5f + 6f);
+        float minX = Mathf.Min(courtyardEdgeX, apronOuterX);
+        float maxX = Mathf.Max(courtyardEdgeX, apronOuterX);
+        const float apronSouthZ = -45f;
+        float apronNorthZ = LairDepthMinZ - 0.3f;
+        float depth = apronNorthZ - apronSouthZ;
+        float centerZ = (apronNorthZ + apronSouthZ) * 0.5f;
+
+        CreateBlock("Hangar Apron Courtyard Floor", new Vector3((minX + maxX) * 0.5f, -0.46f, centerZ), new Vector3(maxX - minX, 0.8f, depth), apronFloor);
+        CreateBlock("Hangar Apron Outer Retaining Wall", new Vector3(apronOuterX, 1.45f, centerZ), new Vector3(0.55f, 3.2f, depth), wallColor);
+        CreateBlock("Hangar Apron South Retaining Wall", new Vector3((minX + maxX) * 0.5f, 1.45f, apronSouthZ), new Vector3(maxX - minX, 3.2f, 0.55f), wallColor);
+
+        CreateDecorationBlock("Hangar Apron Approach", new Vector3(spec.ExteriorDoorX, -0.015f, centerZ), new Vector3(spec.doorWidth, 0.08f, depth - 1f), new Color(0.15f, 0.17f, 0.19f));
+        for (int edge = -1; edge <= 1; edge += 2)
+        {
+            CreateDecorationBlock(
+                $"Hangar Apron Hazard Strip {(edge < 0 ? "A" : "B")}",
+                new Vector3(spec.ExteriorDoorX + edge * spec.doorWidth * 0.5f, 0.03f, centerZ),
+                new Vector3(0.3f, 0.06f, depth - 1f),
+                hazardColor);
+        }
+
+        CreateFacilityLamp("Hangar Apron Lamp A", new Vector3(apronOuterX - side * 1.2f, 0f, apronSouthZ + 4f));
+        CreateFacilityLamp("Hangar Apron Lamp B", new Vector3(apronOuterX - side * 1.2f, 0f, apronNorthZ - 3f));
     }
 
     private void CreateGarageInterior(Vector3 position, float sideDirection, GameObject[] levelVisuals)
@@ -6323,68 +6595,196 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
     }
 
-    private void CreateElevatorStation(
-        float floorY,
-        string stationLabel,
-        string leftDestinationLabel,
-        Vector3 leftDestination,
-        string rightDestinationLabel,
-        Vector3 rightDestination)
+    private const float ElevatorDoorHalfWidth = 2f;
+    private const float ElevatorDoorHeight = 4.1f;
+    private const float ElevatorCarCenterZ = 32f;
+
+    // Hollow shaft, a car that travels between floors, sliding landing doors,
+    // call buttons on every landing, and floor buttons inside the car.
+    private void CreateLairElevator(Color shaftColor)
     {
-        Color doorColor = new Color(0.11f, 0.15f, 0.17f);
+        float[] stopY = { 0f, LairOperationsY + 0.2f, LairCommandY + 0.2f };
+        string[] stopNames = { "Ground Level", "Operations Level", "Command Level" };
+        string[] stationLabels = { "GROUND // LOGISTICS", "LEVEL 2 // OPERATIONS", "LEVEL 3 // COMMAND" };
+        string[] buttonLabels = { "G  LOGISTICS", "2  OPERATIONS", "3  COMMAND" };
         Color elevatorAccent = new Color(0.14f, 0.76f, 0.78f);
+        Color doorColor = new Color(0.11f, 0.15f, 0.17f);
+        const float wallBottom = -0.5f;
+        float wallTop = LairRoofY;
+        float wallHeight = wallTop - wallBottom;
+        float wallCenterY = (wallBottom + wallTop) * 0.5f;
+        float shaftBackZ = LairDepthMaxZ - 0.3f;
+        float shaftDepth = shaftBackZ - ElevatorShaftFrontZ;
+        float frontWallZ = ElevatorShaftFrontZ + 0.15f;
 
-        CreateBlock(
-            $"Elevator Door - {stationLabel}",
-            new Vector3(0f, floorY + 2.55f, 28.92f),
-            new Vector3(5.2f, 5.1f, 0.18f),
-            doorColor);
-        CreateBlock(
-            $"Elevator Header - {stationLabel}",
-            new Vector3(0f, floorY + 5.08f, 28.78f),
-            new Vector3(5.8f, 0.26f, 0.32f),
-            elevatorAccent);
-        CreateBlock(
-            $"Elevator Threshold - {stationLabel}",
-            new Vector3(0f, floorY + 0.04f, 27.75f),
-            new Vector3(6f, 0.16f, 2.5f),
-            new Color(0.18f, 0.22f, 0.24f));
+        // Shaft side walls (the lair's north wall closes the back).
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateBlock(
+                $"Elevator Shaft {(side < 0 ? "West" : "East")} Wall",
+                new Vector3(side * (ElevatorShaftHalfWidth + 0.15f), wallCenterY, ElevatorShaftFrontZ + shaftDepth * 0.5f),
+                new Vector3(0.3f, wallHeight, shaftDepth),
+                shaftColor);
+        }
 
-        GameObject modeledFront = CreateEnvironmentModel(
-            "ElevatorFront_A",
-            $"Modeled Elevator Front - {stationLabel}",
-            new Vector3(0f, floorY, 28.62f),
-            Quaternion.identity,
-            new Vector3(1.08f, 1.2f, 1f),
-            elevatorAccent);
-        DisableChildColliders(modeledFront);
+        // Front wall: full-height jambs either side of the doorways (the landing
+        // doors slide into them), with a lintel between each pair of doorways.
+        float jambWidth = AtriumHalfWidth - ElevatorDoorHalfWidth;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateBlock(
+                $"Elevator Shaft Front {(side < 0 ? "West" : "East")} Jamb Wall",
+                new Vector3(side * (ElevatorDoorHalfWidth + jambWidth * 0.5f), wallCenterY, frontWallZ),
+                new Vector3(jambWidth, wallHeight, 0.3f),
+                shaftColor);
+        }
 
-        CreateElevatorPanel(
-            new Vector3(-1.45f, floorY + 1.1f, 28.72f),
-            leftDestinationLabel,
-            leftDestination);
-        CreateElevatorPanel(
-            new Vector3(1.45f, floorY + 1.1f, 28.72f),
-            rightDestinationLabel,
-            rightDestination);
-        CreateWorldLabel(
-            stationLabel,
-            new Vector3(0f, floorY + 4.35f, 28.65f),
-            Color.white,
-            0.12f);
+        float lintelBottom = wallBottom;
+        for (int stop = 0; stop <= stopY.Length; stop++)
+        {
+            float lintelTop = stop < stopY.Length ? stopY[stop] - 0.05f : wallTop;
+            if (lintelTop - lintelBottom > 0.05f)
+            {
+                CreateBlock(
+                    $"Elevator Shaft Front Lintel Wall {stop + 1}",
+                    new Vector3(0f, (lintelBottom + lintelTop) * 0.5f, frontWallZ),
+                    new Vector3(ElevatorDoorHalfWidth * 2f, lintelTop - lintelBottom, 0.3f),
+                    shaftColor);
+            }
+
+            if (stop < stopY.Length) lintelBottom = stopY[stop] + ElevatorDoorHeight;
+        }
+
+        // The car.
+        GameObject car = new GameObject("Elevator Car");
+        car.transform.SetParent(runtimeRoot, false);
+        car.transform.position = new Vector3(0f, stopY[0], ElevatorCarCenterZ);
+        CreateElevatorCarShell(car.transform, elevatorAccent);
+
+        LairElevator elevator = car.AddComponent<LairElevator>();
+
+        // Floor buttons on the car's east wall.
+        for (int stop = 0; stop < stopY.Length; stop++)
+        {
+            Vector3 buttonPosition = car.transform.position + new Vector3(2.2f, 1.4f + stop * 0.45f, -1.7f);
+            GameObject button = CreateBlock(
+                $"Elevator Car Button Screen {stop + 1}",
+                buttonPosition,
+                new Vector3(0.1f, 0.3f, 0.3f),
+                elevatorAccent,
+                car.transform);
+            LairElevatorButton carButton = button.AddComponent<LairElevatorButton>();
+            carButton.elevator = elevator;
+            carButton.stopIndex = stop;
+            CreateWorldLabel(buttonLabels[stop], buttonPosition + new Vector3(0.05f, 0f, 0.75f), Color.white, 0.07f, car.transform);
+        }
+
+        // Landings.
+        for (int stop = 0; stop < stopY.Length; stop++)
+        {
+            float floorY = stopY[stop];
+            CreateBlock(
+                $"Elevator Header - {stationLabels[stop]}",
+                new Vector3(0f, floorY + ElevatorDoorHeight + 0.35f, ElevatorShaftFrontZ - 0.12f),
+                new Vector3(5.8f, 0.26f, 0.32f),
+                elevatorAccent);
+            CreateBlock(
+                $"Elevator Threshold - {stationLabels[stop]}",
+                new Vector3(0f, floorY - 0.04f, ElevatorShaftFrontZ - 1.2f),
+                new Vector3(5f, 0.16f, 2.3f),
+                new Color(0.18f, 0.22f, 0.24f));
+
+            GameObject modeledFront = CreateEnvironmentModel(
+                "ElevatorFront_A",
+                $"Modeled Elevator Front - {stationLabels[stop]}",
+                new Vector3(0f, floorY, ElevatorShaftFrontZ - 0.38f),
+                Quaternion.identity,
+                new Vector3(1.08f, 1.2f, 1f),
+                elevatorAccent);
+            DisableChildColliders(modeledFront);
+            HideModelParts(modeledFront, "Left Door", "Right Door", "Door Seam");
+
+            // Sliding landing doors set inside the front wall.
+            GameObject leftDoor = CreateBlock(
+                $"Elevator Landing Door Left - {stationLabels[stop]}",
+                new Vector3(-ElevatorDoorHalfWidth * 0.5f, floorY + ElevatorDoorHeight * 0.5f, frontWallZ),
+                new Vector3(ElevatorDoorHalfWidth, ElevatorDoorHeight, 0.12f),
+                doorColor);
+            GameObject rightDoor = CreateBlock(
+                $"Elevator Landing Door Right - {stationLabels[stop]}",
+                new Vector3(ElevatorDoorHalfWidth * 0.5f, floorY + ElevatorDoorHeight * 0.5f, frontWallZ),
+                new Vector3(ElevatorDoorHalfWidth, ElevatorDoorHeight, 0.12f),
+                doorColor);
+            elevator.AddLanding(stopNames[stop], floorY, leftDoor.transform, rightDoor.transform);
+
+            Vector3 callPosition = new Vector3(2.85f, floorY + 1.45f, ElevatorShaftFrontZ - 0.08f);
+            GameObject callButton = CreateBlock(
+                $"Elevator Call Button Screen - {stationLabels[stop]}",
+                callPosition,
+                new Vector3(0.35f, 0.45f, 0.12f),
+                elevatorAccent);
+            LairElevatorButton call = callButton.AddComponent<LairElevatorButton>();
+            call.elevator = elevator;
+            call.stopIndex = stop;
+            call.isCallButton = true;
+            CreateWorldLabel("CALL", callPosition + new Vector3(0f, 0.45f, -0.1f), Color.white, 0.07f);
+
+            CreateWorldLabel(
+                stationLabels[stop],
+                new Vector3(0f, floorY + ElevatorDoorHeight + 0.85f, ElevatorShaftFrontZ - 0.1f),
+                Color.white,
+                0.12f);
+        }
     }
 
-    private void CreateElevatorPanel(Vector3 position, string floorLabel, Vector3 destination)
+    private void CreateElevatorCarShell(Transform car, Color accentColor)
     {
-        GameObject panel = CreateBlock(
-            $"Elevator Panel - {floorLabel}",
-            position,
-            new Vector3(1.2f, 1.4f, 0.22f),
-            new Color(0.14f, 0.76f, 0.78f));
-        LairElevatorPanel elevator = panel.AddComponent<LairElevatorPanel>();
-        elevator.floorLabel = floorLabel;
-        elevator.destination = destination;
-        CreateWorldLabel(floorLabel.ToUpperInvariant(), position + new Vector3(0f, 1f, -0.15f), Color.white, 0.1f);
+        Vector3 origin = car.position;
+        Color carWall = new Color(0.16f, 0.19f, 0.21f);
+        const float halfWidth = 2.45f;
+        const float halfDepth = 2.55f;
+        const float height = 4.35f;
+        const float wall = 0.15f;
+
+        CreateBlock("Elevator Car Floor", origin + new Vector3(0f, -0.125f, 0f), new Vector3(halfWidth * 2f, 0.25f, halfDepth * 2f), new Color(0.2f, 0.23f, 0.25f), car);
+        CreateBlock("Elevator Car Roof", origin + new Vector3(0f, height + wall * 0.5f, 0f), new Vector3(halfWidth * 2f, wall, halfDepth * 2f), carWall, car);
+        CreateBlock("Elevator Car Back Wall", origin + new Vector3(0f, height * 0.5f, halfDepth - wall * 0.5f), new Vector3(halfWidth * 2f, height, wall), carWall, car);
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateBlock($"Elevator Car {(side < 0 ? "West" : "East")} Wall", origin + new Vector3(side * (halfWidth - wall * 0.5f), height * 0.5f, 0f), new Vector3(wall, height, halfDepth * 2f), carWall, car);
+            float postWidth = halfWidth - ElevatorDoorHalfWidth;
+            CreateBlock($"Elevator Car Front {(side < 0 ? "West" : "East")} Post", origin + new Vector3(side * (ElevatorDoorHalfWidth + postWidth * 0.5f), height * 0.5f, -halfDepth + wall * 0.5f), new Vector3(postWidth, height, wall), carWall, car);
+        }
+
+        CreateBlock("Elevator Car Front Header Wall", origin + new Vector3(0f, (ElevatorDoorHeight + height) * 0.5f, -halfDepth + wall * 0.5f), new Vector3(ElevatorDoorHalfWidth * 2f, height - ElevatorDoorHeight, wall), carWall, car);
+        CreateDecorationBlock("Elevator Car Ceiling Light Panel", origin + new Vector3(0f, height - 0.04f, 0f), new Vector3(2.4f, 0.05f, 2.4f), accentColor, car);
+        CreateDecorationBlock("Elevator Car Handrail", origin + new Vector3(0f, 1f, halfDepth - wall - 0.06f), new Vector3(halfWidth * 2f - 0.5f, 0.06f, 0.06f), accentColor, car);
+
+        GameObject lightObject = new GameObject("Elevator Car Light");
+        lightObject.transform.SetParent(car, false);
+        lightObject.transform.localPosition = new Vector3(0f, height - 0.4f, 0f);
+        Light carLight = lightObject.AddComponent<Light>();
+        carLight.type = LightType.Point;
+        carLight.color = Color.Lerp(accentColor, Color.white, 0.75f);
+        carLight.range = 7f;
+        carLight.intensity = 2.2f;
+        carLight.shadows = LightShadows.None;
+    }
+
+    private static void HideModelParts(GameObject model, params string[] partNames)
+    {
+        if (model == null) return;
+        foreach (Transform child in model.GetComponentsInChildren<Transform>(true))
+        {
+            foreach (string partName in partNames)
+            {
+                if (child.name.Contains(partName))
+                {
+                    child.gameObject.SetActive(false);
+                    break;
+                }
+            }
+        }
     }
 
     private void CreateRamp(string rampName, Vector3 start, Vector3 end, float width, Color color)
