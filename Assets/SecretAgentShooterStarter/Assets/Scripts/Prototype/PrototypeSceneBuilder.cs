@@ -5004,6 +5004,8 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         CreateLairPerimeter(parent);
         CreateExpanseLandmarks(parent);
+        CreateExpanseSettlements(parent);
+        CreatePerimeterGateCover(parent);
 
         // Forest and rocks: denser near the base, thinning out with distance.
         System.Random random = new System.Random(9173);
@@ -5031,6 +5033,30 @@ public class PrototypeSceneBuilder : MonoBehaviour
             marker.transform.position = position;
             marker.transform.rotation = Quaternion.LookRotation(LairGroundsCenter - position, Vector3.up);
         }
+
+        // Base defense: an enemy camp appears out in the expanse and sends
+        // waves along these routes (outside each gate → lair entrance).
+        Vector3[][] gateRoutes =
+        {
+            new[] { new Vector3(0f, 0f, PerimeterSouthZ - 14f), new Vector3(0f, 0f, PerimeterSouthZ + 16f), new Vector3(0f, 0f, -80f), new Vector3(0f, 0f, -32f) },
+            new[] { new Vector3(PerimeterHalfX + 14f, 0f, PerimeterSideGateZ), new Vector3(PerimeterHalfX - 14f, 0f, PerimeterSideGateZ), new Vector3(60f, 0f, -40f), new Vector3(20f, 0f, -50f), new Vector3(4f, 0f, -32f) },
+            new[] { new Vector3(-PerimeterHalfX - 14f, 0f, PerimeterSideGateZ), new Vector3(-PerimeterHalfX + 14f, 0f, PerimeterSideGateZ), new Vector3(-62f, 0f, -42f), new Vector3(-22f, 0f, -52f), new Vector3(-4f, 0f, -32f) }
+        };
+        LairDefenseController defense = root.AddComponent<LairDefenseController>();
+        defense.Configure(
+            LairGroundsCenter,
+            LairPlayAreaRadius,
+            PerimeterHalfX,
+            PerimeterSouthZ,
+            PerimeterNorthZ,
+            IsExteriorClearZone,
+            SpawnDefenseAttacker,
+            gateRoutes);
+    }
+
+    private EnemyOperative SpawnDefenseAttacker(string enemyName, Vector3 position, EnemyRank rank, OperativeSpecialization specialization)
+    {
+        return CreateEnemy(enemyName, position, rank, specialization, EnemyCombatController.GetSpecializationColor(specialization));
     }
 
     // Guarded perimeter around the facility grounds, the facility's only wall
@@ -5214,6 +5240,13 @@ public class PrototypeSceneBuilder : MonoBehaviour
             bool alongX = walls[i, 4] == 0f;
             Vector3 size = alongX ? new Vector3(walls[i, 2], walls[i, 3], 0.6f) : new Vector3(0.6f, walls[i, 3], walls[i, 4]);
             CreateBlock($"Expanse Resort Ruin Wall {i + 1}", resort + new Vector3(walls[i, 0], walls[i, 3] * 0.5f - 0.1f, walls[i, 1]), size, concrete, parent);
+
+            // Cover on both sides of the walls tall enough to hide behind.
+            if (walls[i, 3] < 1.5f) continue;
+            Vector3 across = alongX ? new Vector3(0f, 0f, 1.1f) : new Vector3(1.1f, 0f, 0f);
+            Vector3 wallBase = resort + new Vector3(walls[i, 0], -0.1f, walls[i, 1]);
+            CreateCoverPoint(parent, $"Expanse Resort Ruin Wall {i + 1} Cover A", wallBase + across);
+            CreateCoverPoint(parent, $"Expanse Resort Ruin Wall {i + 1} Cover B", wallBase - across);
         }
 
         CreateEnvironmentModel("WindowFacade_A", "Expanse Resort Ruin Facade", resort + new Vector3(-12f, 0f, 8.6f), Quaternion.identity, Vector3.one, new Color(0.7f, 0.6f, 0.4f), parent);
@@ -5263,6 +5296,17 @@ public class PrototypeSceneBuilder : MonoBehaviour
             }
         }
 
+        for (int row = 0; row < 3; row++)
+        {
+            CreateCoverPoint(parent, $"Expanse Yard Cover W{row + 1}", yard + new Vector3(-2.2f, -0.1f, row * 7.5f));
+            CreateCoverPoint(parent, $"Expanse Yard Cover E{row + 1}", yard + new Vector3(8.6f, -0.1f, row * 7.5f));
+        }
+
+        CreateCoverPoint(parent, "Expanse Relay Cover A", relay + new Vector3(-9.2f, -0.1f, -4f));
+        CreateCoverPoint(parent, "Expanse Relay Cover B", relay + new Vector3(-4.8f, -0.1f, -4f));
+        CreateCoverPoint(parent, "Expanse Relay Cover C", relay + new Vector3(7f, -0.1f, 0.8f));
+        CreateCoverPoint(parent, "Expanse Relay Cover D", relay + new Vector3(7f, -0.1f, 5.2f));
+
         // Power line poles along the road south of the checkpoint.
         for (float z = PerimeterSouthZ - 20f; z > -620f; z -= 40f)
         {
@@ -5278,6 +5322,245 @@ public class PrototypeSceneBuilder : MonoBehaviour
             float angle = i * 45f * Mathf.Deg2Rad;
             CreateEnvironmentModel("RockFormation_A", $"Expanse Lake Shore Rock {i + 1}", lake + new Vector3(Mathf.Cos(angle) * 36f, -0.3f, Mathf.Sin(angle) * 24f), Quaternion.Euler(0f, i * 40f, 0f), Vector3.one * 1.6f, new Color(0.3f, 0.3f, 0.29f), parent);
         }
+    }
+
+    // Houses and ruined houses out in the expanse. Small clusters sit just
+    // outside each perimeter gate, so attackers can hold them while the
+    // player defends the gates, and more are spread across the fields where
+    // the enemy camps set up. Every house has open doors and windows, and
+    // cover points inside at the windows and outside at the corners.
+    private struct ExpanseBuildingSpec
+    {
+        public float x;
+        public float z;
+        public float width;
+        public float depth;
+        public bool ruined;
+        public float yawJitter;
+
+        public ExpanseBuildingSpec(float x, float z, float width, float depth, bool ruined, float yawJitter = 0f)
+        {
+            this.x = x;
+            this.z = z;
+            this.width = width;
+            this.depth = depth;
+            this.ruined = ruined;
+            this.yawJitter = yawJitter;
+        }
+
+        public float FootprintRadius => 0.5f * Mathf.Sqrt(width * width + depth * depth) + 1.5f;
+    }
+
+    private static readonly ExpanseBuildingSpec[] ExpanseBuildings =
+    {
+        // Outside the main (south) gate, either side of the road.
+        new ExpanseBuildingSpec(-26f, -150f, 9f, 7f, false, 8f),
+        new ExpanseBuildingSpec(-40f, -171f, 8f, 7f, true, -12f),
+        new ExpanseBuildingSpec(30f, -158f, 9f, 8f, false, -6f),
+        new ExpanseBuildingSpec(46f, -140f, 7f, 6f, true, 15f),
+        // Outside the east gate.
+        new ExpanseBuildingSpec(142f, -2f, 9f, 7f, false, 5f),
+        new ExpanseBuildingSpec(145f, -40f, 8f, 7f, false, -10f),
+        new ExpanseBuildingSpec(166f, -18f, 7f, 6f, true, 20f),
+        // Outside the west gate.
+        new ExpanseBuildingSpec(-142f, -38f, 9f, 7f, false, -7f),
+        new ExpanseBuildingSpec(-146f, 2f, 8f, 7f, true, 12f),
+        new ExpanseBuildingSpec(-166f, -22f, 8f, 7f, false, 4f),
+        // Out in the fields.
+        new ExpanseBuildingSpec(90f, -205f, 10f, 8f, false, 10f),
+        new ExpanseBuildingSpec(110f, -188f, 7f, 6f, true, -18f),
+        new ExpanseBuildingSpec(40f, -212f, 9f, 7f, false, -4f),
+        new ExpanseBuildingSpec(-100f, -208f, 9f, 7f, false, 6f),
+        new ExpanseBuildingSpec(-122f, -192f, 8f, 6f, true, 25f),
+        new ExpanseBuildingSpec(200f, -120f, 8f, 7f, true, -9f),
+        new ExpanseBuildingSpec(200f, 80f, 9f, 7f, false, 14f),
+        new ExpanseBuildingSpec(214f, 42f, 8f, 6f, true, -20f),
+        new ExpanseBuildingSpec(100f, 185f, 9f, 8f, false, -12f),
+        new ExpanseBuildingSpec(-130f, 165f, 8f, 7f, true, 18f),
+        new ExpanseBuildingSpec(-205f, -80f, 9f, 8f, false, -5f),
+        new ExpanseBuildingSpec(-214f, -112f, 8f, 6f, true, 10f),
+        new ExpanseBuildingSpec(-210f, 10f, 9f, 7f, false, 8f)
+    };
+
+    private void CreateExpanseSettlements(Transform parent)
+    {
+        GameObject root = new GameObject("Expanse Houses and Ruins");
+        root.transform.SetParent(parent, false);
+        System.Random random = new System.Random(4411);
+        for (int i = 0; i < ExpanseBuildings.Length; i++)
+        {
+            ExpanseBuildingSpec spec = ExpanseBuildings[i];
+            Vector3 center = new Vector3(spec.x, -0.1f, spec.z);
+
+            // Front door faces away from the lair, toward the open country.
+            Vector3 away = center - LairGroundsCenter;
+            float yaw = Mathf.Atan2(-away.x, -away.z) * Mathf.Rad2Deg + spec.yawJitter;
+            string houseName = spec.ruined ? $"Expanse Ruined House {i + 1}" : $"Expanse House {i + 1}";
+            CreateExpanseHouse(root.transform, houseName, center, yaw, spec.width, spec.depth, spec.ruined, random);
+        }
+    }
+
+    private void CreateExpanseHouse(Transform parent, string houseName, Vector3 center, float yaw, float width, float depth, bool ruined, System.Random random)
+    {
+        GameObject house = new GameObject(houseName);
+        house.transform.SetParent(parent, false);
+        house.transform.position = center;
+        Transform t = house.transform;
+
+        const float height = 3.1f;
+        const float thickness = 0.3f;
+        float hw = width * 0.5f;
+        float hd = depth * 0.5f;
+        Color[] plaster =
+        {
+            new Color(0.62f, 0.58f, 0.5f), new Color(0.52f, 0.48f, 0.42f), new Color(0.58f, 0.55f, 0.5f), new Color(0.48f, 0.5f, 0.46f)
+        };
+        Color wallColor = ruined ? new Color(0.4f, 0.38f, 0.34f) : plaster[random.Next(plaster.Length)];
+        Color trim = new Color(0.22f, 0.2f, 0.18f);
+        Color roofColor = new Color(0.24f, 0.22f, 0.21f);
+        System.Random ruin = ruined ? random : null;
+
+        // Openings as { offset along the wall, width, bottom, top }.
+        float doorOffset = width * 0.32f;
+        float[,] frontOpenings = { { doorOffset, 1.5f, 0f, 2.3f }, { width * 0.74f, 1.5f, 0.95f, 2.05f } };
+        float[,] backOpenings = { { width * 0.28f, 1.5f, 0.95f, 2.05f }, { width * 0.72f, 1.5f, 0.95f, 2.05f } };
+        float sideLength = depth - thickness;
+        float[,] sideOpenings = { { sideLength * 0.5f, 1.4f, 0.95f, 2.05f } };
+
+        CreateDecorationBlock($"{houseName} Floor", center + new Vector3(0f, 0.03f, 0f), new Vector3(width, 0.06f, depth), ruined ? new Color(0.3f, 0.28f, 0.25f) : new Color(0.36f, 0.3f, 0.24f), t);
+        CreateHouseWall(t, $"{houseName} Front Wall", center + new Vector3(-hw, 0f, -hd), true, width, height, thickness, frontOpenings, wallColor, ruin);
+        CreateHouseWall(t, $"{houseName} Back Wall", center + new Vector3(-hw, 0f, hd), true, width, height, thickness, backOpenings, wallColor, ruin);
+        CreateHouseWall(t, $"{houseName} West Wall", center + new Vector3(-hw, 0f, -hd + thickness * 0.5f), false, sideLength, height, thickness, sideOpenings, wallColor, ruin);
+        CreateHouseWall(t, $"{houseName} East Wall", center + new Vector3(hw, 0f, -hd + thickness * 0.5f), false, sideLength, height, thickness, sideOpenings, wallColor, ruin);
+
+        if (!ruined)
+        {
+            CreateBlock($"{houseName} Roof", center + new Vector3(0f, height + 0.12f, 0f), new Vector3(width + 0.7f, 0.24f, depth + 0.7f), roofColor, t);
+            CreateDecorationBlock($"{houseName} Roof Parapet Front", center + new Vector3(0f, height + 0.4f, -hd - 0.3f), new Vector3(width + 0.7f, 0.32f, 0.12f), trim, t);
+            CreateDecorationBlock($"{houseName} Roof Parapet Back", center + new Vector3(0f, height + 0.4f, hd + 0.3f), new Vector3(width + 0.7f, 0.32f, 0.12f), trim, t);
+            CreateDecorationBlock($"{houseName} Roof Parapet West", center + new Vector3(-hw - 0.3f, height + 0.4f, 0f), new Vector3(0.12f, 0.32f, depth + 0.7f), trim, t);
+            CreateDecorationBlock($"{houseName} Roof Parapet East", center + new Vector3(hw + 0.3f, height + 0.4f, 0f), new Vector3(0.12f, 0.32f, depth + 0.7f), trim, t);
+            CreateDecorationBlock($"{houseName} Chimney", center + new Vector3(hw - 1.2f, height + 0.9f, hd - 1.4f), new Vector3(0.7f, 1.3f, 0.7f), new Color(0.38f, 0.3f, 0.26f), t);
+            CreateDecorationBlock($"{houseName} Porch Canopy", center + new Vector3(-hw + doorOffset, 2.6f, -hd - 0.65f), new Vector3(2.3f, 0.12f, 1.3f), roofColor, t);
+            CreateDecorationBlock($"{houseName} Door Step", center + new Vector3(-hw + doorOffset, 0.06f, -hd - 0.5f), new Vector3(1.9f, 0.12f, 0.9f), new Color(0.4f, 0.39f, 0.36f), t);
+            CreateDecorationBlock($"{houseName} Window Trim Front", center + new Vector3(-hw + width * 0.74f, 0.88f, -hd - 0.17f), new Vector3(1.7f, 0.1f, 0.08f), trim, t);
+
+            // Furniture: something to crouch behind inside.
+            CreateBlock($"{houseName} Table", center + new Vector3(-hw + 1.7f, 0.42f, hd - 1.7f), new Vector3(1.6f, 0.84f, 1f), new Color(0.35f, 0.24f, 0.15f), t);
+            GameObject sofa = CreateBlock($"{houseName} Overturned Sofa", center + new Vector3(hw * 0.35f, 0.45f, 0.3f), new Vector3(2.2f, 0.9f, 0.85f), new Color(0.3f, 0.22f, 0.24f), t);
+            sofa.transform.rotation = Quaternion.Euler(0f, 18f, 0f);
+            CreateBlock($"{houseName} Cabinet", center + new Vector3(-hw + 0.5f, 0.9f, -0.4f), new Vector3(0.6f, 1.8f, 1.4f), new Color(0.3f, 0.22f, 0.14f), t);
+        }
+        else
+        {
+            // Fallen roof slab and rubble.
+            GameObject slab = CreateDecorationBlock($"{houseName} Fallen Roof Slab", center + new Vector3(hw * 0.25f, 0.75f, hd * 0.2f), new Vector3(width * 0.55f, 0.22f, depth * 0.45f), roofColor, t);
+            slab.transform.rotation = Quaternion.Euler(16f, 23f, -11f);
+            for (int r = 0; r < 6; r++)
+            {
+                float rx = Mathf.Lerp(-hw - 1.5f, hw + 1.5f, (float)random.NextDouble());
+                float rz = Mathf.Lerp(-hd - 1.5f, hd + 1.5f, (float)random.NextDouble());
+                float size = 0.3f + (float)random.NextDouble() * 0.6f;
+                GameObject rubble = CreateDecorationBlock($"{houseName} Rubble {r + 1}", center + new Vector3(rx, size * 0.4f, rz), new Vector3(size * 1.4f, size * 0.8f, size), wallColor * 0.85f, t);
+                rubble.transform.rotation = Quaternion.Euler(0f, (float)random.NextDouble() * 90f, 12f);
+            }
+        }
+
+        t.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+        // Cover points: inside at each window (entered through the door),
+        // and outside at each corner.
+        Vector3 doorOutside = t.TransformPoint(new Vector3(-hw + doorOffset, 0f, -hd - 1.4f));
+        Vector3 doorInside = t.TransformPoint(new Vector3(-hw + doorOffset, 0f, -hd + 1.1f));
+        Vector3[] windowSpots =
+        {
+            new Vector3(-hw + width * 0.74f, 0f, -hd + 0.75f),
+            new Vector3(-hw + width * 0.28f, 0f, hd - 0.75f),
+            new Vector3(-hw + width * 0.72f, 0f, hd - 0.75f),
+            new Vector3(-hw + 0.75f, 0f, -hd + thickness * 0.5f + sideLength * 0.5f),
+            new Vector3(hw - 0.75f, 0f, -hd + thickness * 0.5f + sideLength * 0.5f)
+        };
+        for (int w = 0; w < windowSpots.Length; w++)
+        {
+            CreateCoverPoint(t, $"{houseName} Window Cover {w + 1}", t.TransformPoint(windowSpots[w]), 1.3f, doorOutside, doorInside);
+        }
+
+        for (int cx = -1; cx <= 1; cx += 2)
+        {
+            for (int cz = -1; cz <= 1; cz += 2)
+            {
+                CreateCoverPoint(t, $"{houseName} Corner Cover {cx}{cz}", t.TransformPoint(new Vector3(cx * (hw + 0.9f), 0f, cz * (hd + 0.9f))));
+            }
+        }
+    }
+
+    // One wall with door and window openings, built from solid pieces either
+    // side of each opening plus the sill below and lintel above. A ruined
+    // wall gets broken heights and missing pieces.
+    private void CreateHouseWall(Transform parent, string wallName, Vector3 start, bool alongX, float length, float height, float thickness, float[,] openings, Color color, System.Random ruin)
+    {
+        float cursor = 0f;
+        int piece = 0;
+
+        void Piece(float from, float to, float bottom, float top, bool solidSpan)
+        {
+            if (to - from < 0.05f || top - bottom < 0.05f) return;
+            if (ruin != null)
+            {
+                if (solidSpan)
+                {
+                    if (ruin.NextDouble() < 0.12 && to - from < length * 0.5f) return;
+                    top = bottom + (top - bottom) * Mathf.Lerp(0.35f, 1f, (float)ruin.NextDouble());
+                }
+                else if (bottom > 0.01f && ruin.NextDouble() < 0.6)
+                {
+                    return; // lintel fallen out
+                }
+            }
+
+            float mid = (from + to) * 0.5f;
+            float span = to - from;
+            float pieceHeight = top - bottom;
+            Vector3 position = start + (alongX ? new Vector3(mid, 0f, 0f) : new Vector3(0f, 0f, mid)) + Vector3.up * (bottom + pieceHeight * 0.5f);
+            Vector3 size = alongX ? new Vector3(span, pieceHeight, thickness) : new Vector3(thickness, pieceHeight, span);
+            CreateBlock($"{wallName} Piece {++piece}", position, size, color, parent);
+        }
+
+        int count = openings != null ? openings.GetLength(0) : 0;
+        for (int i = 0; i < count; i++)
+        {
+            float left = openings[i, 0] - openings[i, 1] * 0.5f;
+            float right = openings[i, 0] + openings[i, 1] * 0.5f;
+            Piece(cursor, left, 0f, height, true);
+            Piece(left, right, 0f, openings[i, 2], true);
+            Piece(left, right, openings[i, 3], height, false);
+            cursor = right;
+        }
+
+        Piece(cursor, length, 0f, height, true);
+    }
+
+    // Spots just outside each perimeter gate where attackers can stand
+    // beside the gateposts and fire in.
+    private void CreatePerimeterGateCover(Transform parent)
+    {
+        float offset = PerimeterGateHalfWidth + 1.6f;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            CreateCoverPoint(parent, $"Main Gate Outer Cover {side}", new Vector3(side * offset, -0.1f, PerimeterSouthZ - 1.3f));
+            CreateCoverPoint(parent, $"East Gate Outer Cover {side}", new Vector3(PerimeterHalfX + 1.3f, -0.1f, PerimeterSideGateZ + side * offset));
+            CreateCoverPoint(parent, $"West Gate Outer Cover {side}", new Vector3(-PerimeterHalfX - 1.3f, -0.1f, PerimeterSideGateZ + side * offset));
+        }
+    }
+
+    private static void CreateCoverPoint(Transform parent, string pointName, Vector3 position, float firingHeight = 1.3f, params Vector3[] approachPath)
+    {
+        GameObject pointObject = new GameObject(pointName);
+        pointObject.transform.SetParent(parent, true);
+        pointObject.transform.position = position;
+        CoverPoint point = pointObject.AddComponent<CoverPoint>();
+        point.firingHeight = firingHeight;
+        point.approachPath = approachPath ?? new Vector3[0];
     }
 
     private void ScatterExteriorTrees(System.Random random, Transform parent, float minRadius, float maxRadius, int count)
@@ -5343,9 +5626,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
         return LairGroundsCenter + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
     }
 
-    // Makes sure a tall model (like a tree) is standing: if its tallest
-    // dimension isn't vertical, tip it up onto its base. Also freezes any
-    // physics body on it so nothing can topple it.
+    // Makes sure a tree is standing: finds the trunk, works out which way it
+    // points, and turns the whole model so the trunk points straight up with
+    // the crown on top. Uses the trunk's own axis rather than the overall
+    // bounding box, because a turned tree's wide crown makes the box look
+    // wider than it is tall. Also freezes any physics body so nothing can
+    // topple it, and sets the base on the ground.
     private static void StandModelUpright(GameObject model, Vector3 groundPoint)
     {
         if (model == null) return;
@@ -5355,33 +5641,42 @@ public class PrototypeSceneBuilder : MonoBehaviour
             body.useGravity = false;
         }
 
-        Bounds bounds = GetRendererBounds(model);
-        if (bounds.size == Vector3.zero) return;
-        if (bounds.size.y >= bounds.size.x && bounds.size.y >= bounds.size.z) return;
-
-        // Try tipping about X and about Z both ways; keep the one that stands
-        // tallest with the base on the ground.
-        Quaternion original = model.transform.rotation;
-        Quaternion best = original;
-        float bestHeight = bounds.size.y;
-        Vector3[] axes = { Vector3.right, Vector3.forward };
-        foreach (Vector3 axis in axes)
+        MeshFilter trunk = null;
+        foreach (MeshFilter filter in model.GetComponentsInChildren<MeshFilter>(true))
         {
-            for (int sign = -1; sign <= 1; sign += 2)
+            if (filter.sharedMesh != null && filter.name.IndexOf("Trunk", System.StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                model.transform.rotation = Quaternion.AngleAxis(sign * 90f, axis) * original;
-                Bounds tipped = GetRendererBounds(model);
-                bool baseDown = Mathf.Abs(tipped.min.y - model.transform.position.y) < tipped.size.y * 0.25f;
-                if (baseDown && tipped.size.y > bestHeight)
-                {
-                    bestHeight = tipped.size.y;
-                    best = model.transform.rotation;
-                }
+                trunk = filter;
+                break;
             }
         }
 
-        model.transform.rotation = best;
+        if (trunk != null)
+        {
+            // The trunk's longest local axis is the tree's up direction.
+            Vector3 size = Vector3.Scale(trunk.sharedMesh.bounds.size, trunk.transform.lossyScale);
+            Vector3 localAxis = Vector3.up;
+            if (Mathf.Abs(size.x) >= Mathf.Abs(size.y) && Mathf.Abs(size.x) >= Mathf.Abs(size.z)) localAxis = Vector3.right;
+            else if (Mathf.Abs(size.z) >= Mathf.Abs(size.y)) localAxis = Vector3.forward;
+            Vector3 worldAxis = trunk.transform.TransformDirection(localAxis).normalized;
+
+            // Point it from the trunk toward the crown.
+            Vector3 trunkCenter = trunk.transform.TransformPoint(trunk.sharedMesh.bounds.center);
+            Vector3 crownCenter = Vector3.zero;
+            int crownParts = 0;
+            foreach (Renderer part in model.GetComponentsInChildren<Renderer>(true))
+            {
+                if (part.gameObject == trunk.gameObject) continue;
+                crownCenter += part.bounds.center;
+                crownParts++;
+            }
+
+            if (crownParts > 0 && Vector3.Dot(crownCenter / crownParts - trunkCenter, worldAxis) < 0f) worldAxis = -worldAxis;
+            model.transform.rotation = Quaternion.FromToRotation(worldAxis, Vector3.up) * model.transform.rotation;
+        }
+
         Bounds final = GetRendererBounds(model);
+        if (final.size == Vector3.zero) return;
         model.transform.position += Vector3.up * (groundPoint.y - final.min.y);
     }
 
@@ -5414,6 +5709,14 @@ public class PrototypeSceneBuilder : MonoBehaviour
         if (InRect(155f, 181f, -68f, -42f)) return true;   // helipad
         if (InRect(-174f, -160f, 40f, 66f)) return true;   // container yard
         if (InRect(-78f, -2f, 225f, 275f)) return true;    // lake
+        foreach (ExpanseBuildingSpec building in ExpanseBuildings)
+        {
+            float dx = x - building.x;
+            float dz = z - building.z;
+            float reach = building.FootprintRadius + margin;
+            if (dx * dx + dz * dz < reach * reach) return true;
+        }
+
         return false;
     }
 
@@ -5877,6 +6180,16 @@ public class PrototypeSceneBuilder : MonoBehaviour
                     parent);
             }
         }
+
+        // Base defense console beside the main screen.
+        Vector3 consolePosition = new Vector3(outerWallX - side * 2.4f, position.y, position.z - 8.5f);
+        Color alarmRed = new Color(0.85f, 0.16f, 0.12f);
+        GameObject console = CreateBlock("Base Defense Console", consolePosition + new Vector3(0f, 0.55f, 0f), new Vector3(0.9f, 1.1f, 1.3f), new Color(0.14f, 0.15f, 0.16f), parent);
+        console.AddComponent<LairDefenseConsole>();
+        GameObject consoleScreen = CreateDecorationBlock("Base Defense Console Screen", consolePosition + new Vector3(-side * 0.3f, 1.2f, 0f), new Vector3(0.06f, 0.55f, 1.1f), new Color(0.32f, 0.06f, 0.05f), parent);
+        consoleScreen.transform.rotation = Quaternion.Euler(0f, 0f, side * 20f);
+        CreateDecorationBlock("Base Defense Console Alarm Strip", consolePosition + new Vector3(-side * 0.46f, 1.02f, 0f), new Vector3(0.04f, 0.06f, 1.2f), alarmRed, parent);
+        CreateWorldLabel("BASE DEFENSE", new Vector3(outerWallX - side * 0.3f, position.y + 2.5f, consolePosition.z), Color.white, 0.13f, parent);
 
         CreateWorldLabel("MISSION OPERATIONS", new Vector3(frameX, position.y + doorHeight + 0.5f, position.z), Color.white, 0.15f, parent);
         CreateWorldLabel("MISSION OPERATIONS", new Vector3(screenX - side * 0.1f, position.y + roomHeight * 0.5f + roomHeight * 0.26f, position.z), Color.white, 0.24f, parent);

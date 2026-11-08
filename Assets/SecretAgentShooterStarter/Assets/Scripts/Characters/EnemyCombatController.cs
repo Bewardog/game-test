@@ -60,6 +60,22 @@ public class EnemyCombatController : MonoBehaviour
     private float attackRecoveryUntil;
     private Color pendingAttackTraceColor;
 
+    [Header("Assault (base defense attackers)")]
+    [Tooltip("Ranged attackers look for cover points and shoot from them.")]
+    public bool useCover;
+    [Tooltip("Steer around walls and trees instead of stopping when blocked.")]
+    public bool navigateAroundObstacles;
+    [Tooltip("Stop at the last waypoint instead of looping the route.")]
+    public bool stopAtRouteEnd;
+    [Tooltip("Walking speed along the route, as a share of full speed.")]
+    public float routeSpeedMultiplier = 0.45f;
+
+    private CoverPoint cover;
+    private int coverPathIndex;
+    private float coverLegStartedAt;
+    private float nextCoverSearchTime;
+    private float coverNoSightSince = -1f;
+
     public bool IsAlerted => alerted;
     public bool IsInvestigating => !alerted && Time.time < investigateUntil;
     public bool HasBeenObserved => hasBeenObserved;
@@ -88,6 +104,7 @@ public class EnemyCombatController : MonoBehaviour
     private void OnDisable()
     {
         NoiseBroadcast -= HandleBroadcastNoise;
+        ReleaseCover();
     }
 
     public static void BroadcastNoise(
@@ -482,7 +499,7 @@ public class EnemyCombatController : MonoBehaviour
                 return;
             }
 
-            MoveToward(flatTarget, moveSpeed * 0.45f);
+            MoveToward(flatTarget, moveSpeed * routeSpeedMultiplier);
             return;
         }
 
@@ -503,6 +520,14 @@ public class EnemyCombatController : MonoBehaviour
             return;
         }
 
+        if (stopAtRouteEnd && patrolRouteIndex >= patrolRoute.Count - 1)
+        {
+            // Hold at the destination and keep watch.
+            patrolHoldUntil = Time.time + 2f;
+            patrolLegStartedAt = patrolHoldUntil;
+            return;
+        }
+
         patrolRouteIndex = (patrolRouteIndex + 1) % patrolRoute.Count;
         patrolTarget = patrolRoute[patrolRouteIndex];
         patrolHoldUntil = Time.time + Random.Range(
@@ -516,6 +541,16 @@ public class EnemyCombatController : MonoBehaviour
         bool melee = operative.Specialization == OperativeSpecialization.HandToHand ||
             operative.Specialization == OperativeSpecialization.Stealth ||
             operative.Specialization == OperativeSpecialization.Tank;
+
+        if (useCover && !melee && UpdateCover())
+        {
+            if (distance <= attackRange && Time.time >= nextAttackTime && HasLineOfSight())
+            {
+                Attack(false);
+            }
+
+            return;
+        }
 
         switch (operative.Specialization)
         {
@@ -719,16 +754,164 @@ public class EnemyCombatController : MonoBehaviour
         Face(transform.position + direction);
 
         float distance = speed * Time.deltaTime;
+        if (!IsPathBlocked(direction, distance))
+        {
+            transform.position += direction * distance;
+            return;
+        }
+
+        if (!navigateAroundObstacles) return;
+
+        // Blocked: try angling off to one side, then the other, so the
+        // enemy slides around walls, trees and furniture.
+        float[] angles = { 35f, -35f, 70f, -70f, 105f, -105f };
+        foreach (float angle in angles)
+        {
+            Vector3 detour = Quaternion.Euler(0f, angle * flankSign, 0f) * direction;
+            if (IsPathBlocked(detour, distance)) continue;
+            Face(transform.position + detour);
+            transform.position += detour * distance;
+            return;
+        }
+
+        flankSign *= -1f;
+    }
+
+    private bool IsPathBlocked(Vector3 direction, float distance)
+    {
         Vector3 origin = transform.position + Vector3.up * 0.5f;
         RaycastHit[] hits = Physics.SphereCastAll(origin, 0.35f, direction, distance + 0.1f, ~0, QueryTriggerInteraction.Ignore);
         foreach (RaycastHit hit in hits)
         {
             if (hit.collider == null || hit.collider.transform.IsChildOf(transform)) continue;
             if (player != null && hit.collider.transform.IsChildOf(player.transform)) continue;
-            return;
+            return true;
         }
 
-        transform.position += direction * distance;
+        return false;
+    }
+
+    // Moves to and holds a cover point within firing range of the player.
+    // Returns false when there is no usable cover, so the normal fighting
+    // movement takes over.
+    private bool UpdateCover()
+    {
+        if (player == null) return false;
+
+        if (cover != null)
+        {
+            float coverToPlayer = Vector3.Distance(cover.transform.position, player.transform.position);
+            bool stuck = Time.time - coverLegStartedAt > 10f;
+            if (coverToPlayer > attackRange * 1.05f || coverToPlayer < 3f || stuck)
+            {
+                ReleaseCover();
+                nextCoverSearchTime = Time.time + (stuck ? 4f : 0.5f);
+            }
+        }
+
+        if (cover == null)
+        {
+            if (Time.time < nextCoverSearchTime) return false;
+            nextCoverSearchTime = Time.time + 1.5f;
+            CoverPoint found = FindCover();
+            if (found == null || !found.TryClaim(this)) return false;
+            cover = found;
+            coverNoSightSince = -1f;
+            coverLegStartedAt = Time.time;
+
+            // Already close with a clear line to it: skip the approach path.
+            Vector3 toCover = cover.transform.position - transform.position;
+            toCover.y = 0f;
+            bool directRoute = toCover.magnitude < 6f && !IsPathBlocked(toCover.normalized, toCover.magnitude);
+            coverPathIndex = directRoute ? cover.approachPath.Length : 0;
+        }
+
+        Vector3 next = coverPathIndex < cover.approachPath.Length
+            ? cover.approachPath[coverPathIndex]
+            : cover.transform.position;
+        next.y = transform.position.y;
+
+        if (Vector3.Distance(transform.position, next) > 0.5f)
+        {
+            MoveToward(next, moveSpeed);
+            return true;
+        }
+
+        if (coverPathIndex < cover.approachPath.Length)
+        {
+            coverPathIndex++;
+            coverLegStartedAt = Time.time;
+            return true;
+        }
+
+        // In cover: watch the player; move on if they stay out of sight.
+        coverLegStartedAt = Time.time;
+        Face(player.transform.position);
+        if (HasLineOfSight())
+        {
+            coverNoSightSince = -1f;
+        }
+        else if (coverNoSightSince < 0f)
+        {
+            coverNoSightSince = Time.time;
+        }
+        else if (Time.time - coverNoSightSince > 5f)
+        {
+            ReleaseCover();
+            nextCoverSearchTime = Time.time + 0.5f;
+        }
+
+        return true;
+    }
+
+    private CoverPoint FindCover()
+    {
+        CoverPoint best = null;
+        float bestScore = float.MaxValue;
+        float idealRange = attackRange * 0.7f;
+        foreach (CoverPoint candidate in CoverPoint.Active)
+        {
+            if (candidate == null || !candidate.IsFreeFor(this)) continue;
+            Vector3 position = candidate.transform.position;
+            float toSelf = Vector3.Distance(transform.position, position);
+            if (toSelf > 35f) continue;
+            float toPlayer = Vector3.Distance(position, player.transform.position);
+            if (toPlayer < 4f || toPlayer > attackRange * 0.95f) continue;
+
+            float score = toSelf + Mathf.Abs(toPlayer - idealRange) * 0.5f;
+            if (score >= bestScore) continue;
+            if (!CoverSeesPlayer(candidate)) continue;
+            best = candidate;
+            bestScore = score;
+        }
+
+        return best;
+    }
+
+    private bool CoverSeesPlayer(CoverPoint candidate)
+    {
+        Vector3 origin = candidate.transform.position + Vector3.up * candidate.firingHeight;
+        Vector3 target = player.transform.position + Vector3.up * 0.75f;
+        Vector3 direction = target - origin;
+        float distance = direction.magnitude;
+        if (distance < 0.01f) return true;
+
+        RaycastHit[] hits = Physics.RaycastAll(origin, direction / distance, distance, ~0, QueryTriggerInteraction.Ignore);
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null || hit.collider.transform.IsChildOf(transform)) continue;
+            if (hit.collider.transform.IsChildOf(player.transform)) continue;
+            if (hit.collider.GetComponentInParent<EnemyOperative>() != null) continue;
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ReleaseCover()
+    {
+        if (cover != null) cover.Release(this);
+        cover = null;
     }
 
     private void Face(Vector3 target)

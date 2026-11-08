@@ -116,6 +116,8 @@ public class PrototypeHUD : MonoBehaviour
         {
             int currency = SecretLairManager.Instance != null ? SecretLairManager.Instance.currency : 0;
             details += $"\nCURRENCY  {currency}";
+            string defense = LairDefenseController.Instance != null ? LairDefenseController.Instance.StatusText : string.Empty;
+            if (!string.IsNullOrEmpty(defense)) details += "\n" + defense;
         }
 
         int lineCount = details.Split('\n').Length;
