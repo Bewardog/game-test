@@ -6958,20 +6958,23 @@ public class PrototypeSceneBuilder : MonoBehaviour
 
         LairElevator elevator = car.AddComponent<LairElevator>();
 
-        // Floor buttons on the car's east wall.
+        // Floor buttons on a panel on the car's east wall: a dark plate with a
+        // small lit button per floor and the floor name beside it.
+        Vector3 panelCenter = car.transform.position + new Vector3(2.27f, 1.55f, -1.45f);
+        CreateBlock("Elevator Car Button Panel Plate", panelCenter, new Vector3(0.04f, 1.3f, 1.2f), new Color(0.07f, 0.08f, 0.09f), car.transform);
         for (int stop = 0; stop < stopY.Length; stop++)
         {
-            Vector3 buttonPosition = car.transform.position + new Vector3(2.2f, 1.4f + stop * 0.45f, -1.7f);
+            Vector3 buttonPosition = car.transform.position + new Vector3(2.22f, 1.15f + stop * 0.4f, -1.85f);
             GameObject button = CreateBlock(
-                $"Elevator Car Button Screen {stop + 1}",
+                $"Elevator Car Floor Button {stop + 1}",
                 buttonPosition,
-                new Vector3(0.1f, 0.3f, 0.3f),
-                elevatorAccent,
+                new Vector3(0.06f, 0.16f, 0.16f),
+                new Color(0.12f, 0.55f, 0.58f),
                 car.transform);
             LairElevatorButton carButton = button.AddComponent<LairElevatorButton>();
             carButton.elevator = elevator;
             carButton.stopIndex = stop;
-            CreateWorldLabel(buttonLabels[stop], buttonPosition + new Vector3(0.05f, 0f, 0.75f), Color.white, 0.07f, car.transform);
+            CreateWorldLabel(buttonLabels[stop], buttonPosition + new Vector3(0f, 0f, 0.55f), Color.white, 0.055f, car.transform);
         }
 
         // Landings.
@@ -7052,8 +7055,12 @@ public class PrototypeSceneBuilder : MonoBehaviour
         }
 
         CreateBlock("Elevator Car Front Header Wall", origin + new Vector3(0f, (ElevatorDoorHeight + height) * 0.5f, -halfDepth + wall * 0.5f), new Vector3(ElevatorDoorHalfWidth * 2f, height - ElevatorDoorHeight, wall), carWall, car);
-        CreateDecorationBlock("Elevator Car Ceiling Light Panel", origin + new Vector3(0f, height - 0.04f, 0f), new Vector3(2.4f, 0.05f, 2.4f), accentColor, car);
-        CreateDecorationBlock("Elevator Car Handrail", origin + new Vector3(0f, 1f, halfDepth - wall - 0.06f), new Vector3(halfWidth * 2f - 0.5f, 0.06f, 0.06f), accentColor, car);
+        for (int strip = -1; strip <= 1; strip += 2)
+        {
+            CreateDecorationBlock($"Elevator Car Ceiling Light Strip {strip}", origin + new Vector3(strip * 1.1f, height - 0.04f, 0f), new Vector3(0.12f, 0.04f, 3.4f), Color.Lerp(accentColor, Color.black, 0.45f), car);
+        }
+
+        CreateDecorationBlock("Elevator Car Handrail Post", origin + new Vector3(0f, 1f, halfDepth - wall - 0.06f), new Vector3(halfWidth * 2f - 0.5f, 0.05f, 0.05f), new Color(0.45f, 0.48f, 0.5f), car);
 
         GameObject lightObject = new GameObject("Elevator Car Light");
         lightObject.transform.SetParent(car, false);
