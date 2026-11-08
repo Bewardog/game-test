@@ -407,10 +407,21 @@ public class SpyWeaponController : MonoBehaviour
         {
             if (enemy != null)
             {
-                if (sedation > 0f) enemy.ApplySedation(sedation);
-                if (lethal > 0f) enemy.TakeDamage(lethal);
+                bool headshot = false;
+                if (sedation > 0f)
+                {
+                    if (firesDarts) enemy.ReceiveTranquilizerDart(sedation, impactPoint, out headshot);
+                    else enemy.ApplySedation(sedation);
+                }
+
+                if (lethal > 0f)
+                {
+                    if (!firesDarts) headshot = enemy.IsHeadshot(impactPoint);
+                    enemy.TakeDamage(headshot ? lethal * 3f : lethal);
+                }
+
                 string message = enemy.isKnockedOut
-                    ? "TARGET SEDATED"
+                    ? headshot ? "HEADSHOT  -  TARGET SEDATED" : "TARGET SEDATED"
                     : $"SEDATION {Mathf.CeilToInt(enemy.sedation)}/{Mathf.CeilToInt(enemy.SedationThreshold)}";
                 SetFeedback(message, true, 0.8f);
             }

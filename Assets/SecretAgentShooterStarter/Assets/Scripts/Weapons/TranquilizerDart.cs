@@ -50,7 +50,7 @@ public class TranquilizerDart : MonoBehaviour
             owner?.RecordProjectileHit();
             if (sedationAmount > 0f)
             {
-                enemy.ApplySedation(sedationAmount);
+                enemy.ReceiveTranquilizerDart(sedationAmount, transform.position, out _);
             }
 
             if (lethalDamage > 0f)

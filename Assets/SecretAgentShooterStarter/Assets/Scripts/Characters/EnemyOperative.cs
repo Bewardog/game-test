@@ -118,6 +118,64 @@ public class EnemyOperative : MonoBehaviour, IInteractable
         }
     }
 
+    private Transform headBone;
+    private bool headBoneSearched;
+
+    // Unaware: the mission isn't on alert and this operative hasn't spotted anyone.
+    public bool IsUnaware()
+    {
+        if (isDead || isKnockedOut || isRecruited) return false;
+        if (MissionManager.Instance != null && MissionManager.Instance.IsAlerted) return false;
+        EnemyCombatController combat = GetComponent<EnemyCombatController>();
+        return combat == null || !combat.IsAlerted;
+    }
+
+    // A hit counts as a headshot when it lands at or above the base of the
+    // skull. Uses the Head bone when the model has one, otherwise the top of
+    // the body collider.
+    public bool IsHeadshot(Vector3 hitPoint)
+    {
+        if (!headBoneSearched)
+        {
+            headBoneSearched = true;
+            headBone = FindNamedBone(GetComponentsInChildren<Transform>(true), "Head");
+        }
+
+        if (headBone != null)
+        {
+            return hitPoint.y >= headBone.position.y - 0.05f * transform.lossyScale.y;
+        }
+
+        Collider body = GetComponent<Collider>();
+        if (body == null) return false;
+        Bounds bounds = body.bounds;
+        return hitPoint.y >= bounds.max.y - bounds.size.y * 0.15f;
+    }
+
+    // Tranquilizer dart hit. A headshot sedates instantly (commanders take
+    // triple sedation instead). A hit on an unaware target counts double, and
+    // knocking out an unaware target doesn't raise the alarm.
+    public bool ReceiveTranquilizerDart(float amount, Vector3 hitPoint, out bool headshot)
+    {
+        headshot = false;
+        if (isDead || isKnockedOut || isRecruited) return false;
+
+        headshot = IsHeadshot(hitPoint);
+        bool unaware = IsUnaware();
+        if (headshot && Rank != EnemyRank.Commander)
+        {
+            if (!unaware) MissionManager.Instance?.TriggerAlert($"{name} was attacked");
+            sedation = SedationThreshold;
+            GetAnimationDriver()?.PlayAction(CharacterActionAnimation.Hit);
+            KnockOut();
+            return true;
+        }
+
+        float multiplier = (headshot ? 3f : 1f) * (unaware ? 2f : 1f);
+        ApplySedation(amount * multiplier);
+        return isKnockedOut;
+    }
+
     public bool CanReceiveSilentTakedown(SpyPlayerController player)
     {
         if (player == null || isDead || isKnockedOut || isRecruited || isBeingCarried) return false;
